@@ -82,6 +82,24 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  packages/plugins/file-stats:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  packages/plugins/note:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  packages/plugins/theme-service:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
   packages/shell-default:
     dependencies:
       '@issheepbox/kernel':

@@ -1,0 +1,27 @@
+{
+  "id": "org.issheepbox.example.theme-service",
+  "name": "主题服务",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "TASK-009 官方示例插件：带服务形态，注册 theme 服务并广播 theme:changed 事件，供其他插件协作消费",
+  "author": "Is Sheep Box",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "permissions": [],
+  "requires": {},
+  "contributes": {
+    "services": [
+      {
+        "name": "theme",
+        "version": "1.0.0",
+        "description": "主题服务：查询/切换 light/dark 主题"
+      }
+    ],
+    "events": [
+      {
+        "name": "theme:changed",
+        "description": "主题变更时广播；载荷 { theme }"
+      }
+    ]
+  }
+}
