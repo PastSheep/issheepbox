@@ -101,13 +101,17 @@
 - 完成时间：
 
 ### TASK-010：插件规范 v1 文档 + registry 仓库初始化
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：待合并
+- 负责 agent：agent-spec
+- 分支：agent-spec/docs-plugin-spec-v1
 - 需求描述：输出插件规范 v1 正式文档（manifest 全字段、目录结构、发布要求、校验规则、示例）；定义 `plugins.json`（registry index）格式；初始化 GitHub registry 仓库（含 README 与首个示例条目）。**规范先行**：草案先行定稿，manifest 字段与 TASK-002 的 ctx API v1 对齐（未完成时先按草案写、后续修订）；TASK-009 示例插件实现时验证规范并反馈修订。若需求方尚未提供 GitHub 仓库信息，先交付规范文档与格式定义，仓库初始化待信息就绪。
 - 验收标准：规范文档可指导第三方独立开发插件；plugins.json 格式有 schema 或文档；registry 仓库就绪（或已明确待办）。
 - 依赖：无（规范先行；TASK-009 负责验证反馈）
 - 完成时间：
+- **本次交付（agent-spec）**：
+  - `docs/plugin-spec-v1.md`：插件规范 v1 正式文档，含 manifest 全字段、目录结构、生命周期、容器 seam、权限、依赖协作、构建打包、校验规则、完整便签插件示例。ctx API 方法签名部分标注「待对齐 TASK-002」。
+  - `docs/plugin-registry-schema.md`：`plugins.json` registry index 格式定义，含完整字段文档、JSON Schema、示例条目、维护流程。
+- **待办（registry 仓库初始化）**：需求方尚未提供 GitHub 组织/仓库信息，registry 仓库（含 README、空 `plugins.json`、schema 文件）待信息就绪后另行初始化，不在本分支范围内。
 
 ### TASK-011：Electron 打包与发布
 - 状态：待派发
