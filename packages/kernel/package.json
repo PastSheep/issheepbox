@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "description": "Is Sheep Box 自研极薄内核：加载器/生命周期/services+events/依赖/profile 占位骨架",
   "license": "UNLICENSED",
+  "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
