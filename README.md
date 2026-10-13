@@ -46,6 +46,9 @@ pnpm typecheck
 
 # Lint
 pnpm lint
+
+# 打包 Windows 安装包（NSIS，产物在 release/）
+pnpm --filter @issheepbox/desktop run pack
 ```
 
 > `pnpm dev` 当前只打开一个空窗口并打印内核 apiVersion；
@@ -60,6 +63,7 @@ pnpm lint
 | `docs/workflow.md` | 完整工作流：角色、任务生命周期、新增 agent 流程 |
 | `docs/conventions.md` | 分支命名、提交信息、工作区约定 |
 | `docs/merge-policy.md` | 合并与审查流程、冲突解决原则、main 保护规则 |
+| `docs/version-policy.md` | SemVer 演进规则与发布流程（TASK-011） |
 | `docs/TASKS.md` | 任务清单与状态 |
 
 ## 重要原则

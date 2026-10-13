@@ -1,0 +1,54 @@
+# electron-builder 配置（TASK-011）。
+# 文档：https://www.electron.build/configuration
+appId: org.issheepbox.app
+productName: Is Sheep Box
+copyright: Copyright © 2026 Is Sheep Box
+
+# 输出目录
+directories:
+  output: ../../release
+  buildResources: build
+
+# 应用入口（相对 apps/desktop）
+main: dist/main.js
+
+# 打包内容：
+#  - apps/desktop/dist（主进程 + preload 编译产物）
+#  - apps/desktop/index.html（渲染进程入口）
+#  - packages/*/dist（内核与插件编译产物，pnpm workspace 软链需要解引用）
+files:
+  - dist/**/*
+  - index.html
+  - "../../packages/*/dist/**/*"
+  - "../../packages/*/package.json"
+  - "!**/*.map"
+
+# 额外资源：第一方内置插件（shell-default、approval-policy）
+# 这些目录会原样拷贝到 resources/builtin-plugins/，
+# 首次启动时由 main.ts 展开到 userData/plugins/。
+extraResources:
+  - from: ../../packages/shell-default
+    to: builtin-plugins/shell-default
+    filter:
+      - "dist/**/*"
+      - "plugin.json"
+      - "package.json"
+  - from: ../../packages/approval-policy
+    to: builtin-plugins/approval-policy
+    filter:
+      - "dist/**/*"
+      - "plugin.json"
+      - "package.json"
+
+# Windows 安装包（NSIS）
+win:
+  target:
+    - nsis
+  artifactName: "IsSheepBox-${version}-${arch}.${ext}"
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Is Sheep Box
