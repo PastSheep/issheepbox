@@ -1,15 +1,31 @@
 /**
- * services 注册表（占位骨架）。
+ * 服务注册表。
  *
- * 职责（TASK-003 实现）：插件通过 ctx 注册/消费服务；
- * 插件卸载时其注册的服务自动注销（可逆 effects）。
+ * 插件通过 ctx.services.register(name, service) 提供能力，
+ * 其他插件通过 ctx.services.get(name) 消费。
+ *
+ * TASK-003 将在此基础上包一层可逆 effects：插件卸载时自动注销其注册的服务。
  */
-export class ServiceRegistry {
-  register<T>(_name: string, _service: T): void {
-    throw new Error('ServiceRegistry.register() 未实现：见 TASK-003');
+import type { ServiceRegistry } from '../types';
+
+export class ServiceRegistryImpl implements ServiceRegistry {
+  private readonly services = new Map<string, unknown>();
+
+  register<T>(name: string, service: T): void {
+    if (this.services.has(name)) {
+      throw new Error(`Service "${name}" 已注册，重复注册不被允许`);
+    }
+    this.services.set(name, service);
   }
 
-  resolve<T>(_name: string): T {
-    throw new Error('ServiceRegistry.resolve() 未实现：见 TASK-003');
+  get<T>(name: string): T {
+    if (!this.services.has(name)) {
+      throw new Error(`Service "${name}" 未注册`);
+    }
+    return this.services.get(name) as T;
+  }
+
+  has(name: string): boolean {
+    return this.services.has(name);
   }
 }
