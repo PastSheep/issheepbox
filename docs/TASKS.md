@@ -74,13 +74,15 @@
 - **合并记录（merger）**：2026-10-13 审查通过并合并（merge `2353960`），远端分支已删除。
 
 ### TASK-006：壳插件·最小默认壳
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-kernel
+- 分支：agent-kernel/feat-shell-default
 - 需求描述：实现最小默认壳（第一方、不可卸载 fallback）：主界面（导航栏 + 工具箱网格 + 插件管理页 + 设置页）；提供容器 seam（面板/入口注册 API）；插件启停开关；展示各插件状态。
 - 验收标准：默认壳可启动并渲染；工具插件可通过 seam 注册入口并在网格显示；启停开关实时生效；壳本身是可替换的插件（结构上验证）。
 - 依赖：TASK-004
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `6ec2816`），远端分支已删除。功能复跑验收（Node 直连内核双场景）：有壳场景 discovered=[approval-policy, shell-default]、safeMode=false、activeShell=org.issheepbox.shell-default、shell:ui service 已注册、app:profile-changed/app:profile-restored 均转发为 shell:ui-refresh（含 shell-mounted 初始信号）；无壳场景 safeMode=true 且 app:safe-mode 触发（reason=壳插件未加载，回退默认壳）；typecheck/lint exit 0。
+- **边界标注**（任务方声明，合并者登记）：① 未在真实 Electron 窗口人工验证 UI 渲染（无图形环境，IPC 经 Node 侧事件流验证）；② pluginsDir 开发态硬编码指向 monorepo packages/，生产态改 userData/plugins 留打包任务（TASK-011）；③ shell:ui.registerPanel 仅记录面板列表，未实现实际挂载区域。
 
 ### TASK-007：市场客户端（GitHub registry）
 - 状态：待派发
