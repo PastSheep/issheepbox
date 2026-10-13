@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/kernel" },
+    { "path": "./packages/shell-default" },
+    { "path": "./packages/market-client" },
+    { "path": "./apps/desktop" }
+  ]
+}
