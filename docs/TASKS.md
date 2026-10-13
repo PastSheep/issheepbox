@@ -128,7 +128,7 @@
   - `docs/plugin-spec-v1.md`：插件规范 v1 正式文档，含 manifest 全字段、目录结构、生命周期、容器 seam、权限、依赖协作、构建打包、校验规则、完整便签插件示例。ctx API 方法签名部分标注「待对齐 TASK-002」。
   - `docs/plugin-registry-schema.md`：`plugins.json` registry index 格式定义，含完整字段文档、JSON Schema、示例条目、维护流程。
 - **合并记录（merger）**：2026-10-13 审查通过并合并（merge `ab96dac`），远端分支已删除。
-- **待办（registry 仓库初始化）**：需求方尚未提供 GitHub 组织/仓库信息，registry 仓库（含 README、空 `plugins.json`、schema 文件）待信息就绪后另行初始化。
+- **待办（registry 仓库初始化）**：✅ 已销项（2026-10-13）。registry 仓库已初始化：`https://github.com/PastSheep/issheepbox-registry`（含 README、空 `plugins.json`（registryVersion=1.0.0/plugins=[]）、`schemas/plugins.schema.json`），raw 地址实测 HTTP 200；market-client `DEFAULT_REGISTRY_URL` 已落库为真实地址（见 TASK-007 条目 registry URL 落库记录）。
 
 ### TASK-011：Electron 打包与发布
 - 状态：待派发
