@@ -1,7 +1,18 @@
 /**
- * 预加载脚本。
+ * 预加载脚本：向渲染进程暴露受控的壳 API。
  *
- * 当前为空：保持 contextIsolation=true、sandbox=true 的安全默认。
- * 后续任务（壳插件、IPC）在此暴露受控 API 给渲染进程。
+ * 安全约束：contextIsolation=true、sandbox=true、nodeIntegration=false。
+ * 只暴露最小必要 API，不直接暴露 ipcRenderer。
  */
-export {};
+import { contextBridge, ipcRenderer } from 'electron';
+
+contextBridge.exposeInMainWorld('shellAPI', {
+  /** 订阅 UI 状态更新。 */
+  onUiState: (callback: (state: unknown) => void) => {
+    const handler = (_event: unknown, state: unknown) => callback(state);
+    ipcRenderer.on('shell:ui-state', handler);
+    return () => ipcRenderer.removeListener('shell:ui-state', handler);
+  },
+  /** 主动请求一次状态刷新。 */
+  requestState: () => ipcRenderer.invoke('shell:get-state'),
+});

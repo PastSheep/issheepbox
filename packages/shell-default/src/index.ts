@@ -1,16 +1,64 @@
+/**
+ * Is Sheep Box 默认宿主壳插件（shell-default）。
+ *
+ * 职责（TASK-006）：
+ *  - 作为 DEFAULT_SHELL_ID，被 ProfileEngine.boot() 第一个挂载
+ *  - 订阅内核事件（profile 变更 / 安全模式 / 快照恢复），触发 UI 刷新信号
+ *  - 注册 shell:ui service，为后续插件提供面板 seam（本任务仅占位）
+ *
+ * 边界：
+ *  - 本插件运行于主进程（Node.js），不直接操作 DOM
+ *  - 渲染由 Electron 渲染进程负责；本插件通过 EventBus 发信号，
+ *    desktop 主进程桥接到 IPC → preload → renderer
+ *  - ctx 只使用 v1 已定稿接口面（manifest / events / services / logger）
+ */
 import type { PluginContext } from '@issheepbox/kernel';
 
-/**
- * 最小默认壳插件（占位）。
- *
- * TASK-006 实现：
- *  - 主界面（导航栏 + 工具箱网格 + 插件管理页 + 设置页）
- *  - 提供容器 seam（面板/入口/布局插槽）
- *  - 插件启停开关
- *  - 第一方、预置、不可卸载的 fallback 壳
- *
- * 当前仅导出一个占位工厂函数，保证包可独立构建。
- */
-export default function shellDefault(_ctx: PluginContext): void {
-  // TASK-006：注册壳 UI、容器 seam
+/** shell:ui service seam（供后续插件注册面板入口）。 */
+export interface ShellUiService {
+  /** 注册一个面板入口（占位，TASK-006 仅记录，不实现 UI 挂载）。 */
+  registerPanel: (panelId: string, title: string) => void;
+  /** 已注册面板列表。 */
+  panels: Array<{ id: string; title: string }>;
+}
+
+interface ProfileChangedPayload { name: string }
+interface SafeModePayload { reason: string }
+interface RestoredPayload { snapshotId: string }
+
+export default function shellDefault(ctx: PluginContext): void {
+  ctx.logger.info('默认壳已挂载');
+
+  // 注册 shell:ui service：面板 seam，供其他插件贡献 UI 区域。
+  const panels: Array<{ id: string; title: string }> = [];
+  const uiService: ShellUiService = {
+    panels,
+    registerPanel(panelId, title) {
+      panels.push({ id: panelId, title });
+      ctx.events.emit('shell:ui-refresh', { reason: 'panel-registered', panelId });
+    },
+  };
+  ctx.services.register('shell:ui', uiService);
+
+  // 订阅内核事件：profile 变更、安全模式、快照恢复时触发 UI 刷新。
+  ctx.events.on('app:profile-changed', (...args: unknown[]) => {
+    const payload = args[0] as ProfileChangedPayload;
+    ctx.logger.info(`profile 变更: ${payload.name}`);
+    ctx.events.emit('shell:ui-refresh', { reason: 'profile-changed', name: payload.name });
+  });
+
+  ctx.events.on('app:safe-mode', (...args: unknown[]) => {
+    const payload = args[0] as SafeModePayload;
+    ctx.logger.warn(`进入安全模式: ${payload.reason}`);
+    ctx.events.emit('shell:ui-refresh', { reason: 'safe-mode', detail: payload.reason });
+  });
+
+  ctx.events.on('app:profile-restored', (...args: unknown[]) => {
+    const payload = args[0] as RestoredPayload;
+    ctx.logger.info(`从快照恢复: ${payload.snapshotId}`);
+    ctx.events.emit('shell:ui-refresh', { reason: 'profile-restored', snapshotId: payload.snapshotId });
+  });
+
+  // 挂载完成时发一次初始刷新信号。
+  ctx.events.emit('shell:ui-refresh', { reason: 'shell-mounted' });
 }
