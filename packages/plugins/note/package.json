@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-note",
+  "version": "1.0.0",
+  "description": "TASK-009 官方示例插件：纯 UI 面板形态（便签，无权限）",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
