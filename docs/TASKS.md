@@ -94,6 +94,7 @@
 - 完成时间：2026-10-13
 - **合并记录（merger）**：2026-10-13 审查通过并合并（merge `5ade5b9`），远端分支已删除。功能复跑验收：verify:fixture 46/46 断言通过（fixture 12 条：4 合法 + 8 非法；覆盖顶层/单条/重复 id 分层容错、list 九类过滤、compareVersions SemVer 语义、占位接口抛错）；typecheck/lint exit 0。交付范围：registry 类型族 + 容错解析 parseRegistryIndex（永不抛异常）+ compareVersions/parseSemver 纯函数 + MarketClient（fetchIndex/list/getById/invalidEntries/topLevelErrors）。
 - **边界标注**（任务方声明，合并者登记）：① 未改 pnpm-workspace.yaml（P-002 已由 TASK-008 落库 esbuild:true，本任务 pull 到 58003b4 后 pnpm install/typecheck 实测可用，P-002 保持销项）；② id 校验接受连字符，与 schema pattern 冲突 → 登记 P-003 后续修订；③ download/install/uninstall/update 为 Promise<never> 占位，依赖 registry 仓库落地与 TASK-011 打包；④ 未跑 CI（合并后由流水线执行）；⑤ DEFAULT_REGISTRY_URL 为占位常量（REPLACE_ORG/REPLACE_REPO），待需求方提供 GitHub 组织/仓库名（与 TASK-010 遗留的 registry 初始化待办相关）。
+- **registry URL 落库**：574fe54 已合并（merge `336e004`），DEFAULT_REGISTRY_URL 由占位替换为 `https://raw.githubusercontent.com/PastSheep/issheepbox-registry/main/plugins.json`；合并者复验：该 URL 实测 HTTP 200，正文 registryVersion=1.0.0/plugins=[]，经 market-client dist 的 parseRegistryIndex 解析无顶层错误（边界⑤的占位状态自此解除）。
 
 ### TASK-008：权限声明与安装授权
 - 状态：已完成
