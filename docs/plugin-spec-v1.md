@@ -1,7 +1,7 @@
 # Is Sheep Box 插件规范 v1
 
-> **版本**：v1.0.0-draft  
-> **状态**：规范先行（草案正式版），ctx API 细节待 TASK-002 定稿后修订  
+> **版本**：v1.0.0  
+> **状态**：ctx API v1 已由 TASK-002 定稿；后续 minor 版本只增不破  
 > **适用范围**：所有第三方插件开发者、第一方插件开发者、内核实现者  
 > **最后更新**：2026-10-13
 
@@ -136,7 +136,7 @@ my-note-plugin/
 - **格式**：SemVer range，如 `^1.0.0`、`~1.2`、`>=1.0 <2.0`。
 - **语义**：声明本插件兼容的 ctx API 主版本范围。内核加载时校验。
 - **推荐**：v1 插件一律写 `^1.0.0`。
-- **⚠️ 待对齐**：具体 ctx API v1 的版本号与可用接口集合，待 TASK-002 内核定稿后补充。当前按 `^1.0.0` 占位。
+- 当前内核 ctx API v1 已交付（TASK-002），接口面见第 4.2 节。
 
 #### `entry`
 
@@ -318,24 +318,29 @@ export default async function main(ctx: PluginContext): Promise<void> {
 - 函数内注册的一切（命令、事件监听、UI 入口）在插件卸载时由内核**自动回滚**，插件代码无需手动清理。
 - 插件运行在隔离的 JS 上下文，不能访问宿主的 `window` / `document` / `require` 等全局对象，一切通过 `ctx` 通信。
 
-### 4.2 ctx API 概览
+### 4.2 ctx API v1
 
-> **⚠️ 待对齐（TASK-002）**  
-> 以下为 v1 预期接口面，具体方法签名、事件名、服务名以 TASK-002 输出的 `ctx.d.ts` 类型定义为准。本节列出的接口清单用于规范先行，插件开发者可先据此设计，待类型定义发布后做最终对齐。
+内核在调用插件入口函数时注入一个 `ctx: PluginContext` 对象。v1 初始接口面如下；
+后续 minor 版本只增不破（见第 12 节兼容性承诺）。
 
-| 命名空间 | 用途 | 主要方法 |
-|---|---|---|
-| `ctx.logger` | 日志 | `info()`, `warn()`, `error()`, `debug()` |
-| `ctx.events` | 事件总线（发布/订阅） | `on()`, `off()`, `emit()` |
-| `ctx.services` | 服务注册表（请求/响应） | `register()`, `get()`, `has()` |
-| `ctx.commands` | 命令注册 | `register()`, `execute()` |
-| `ctx.panels` | 面板操作（壳提供） | `open()`, `close()`, `setTitle()` |
-| `ctx.storage` | 插件私有存储 | `get()`, `set()`, `delete()` |
-| `ctx.config` | 插件配置（用户可改的设置项） | `get()`, `set()`, `defineSchema()` |
-| `ctx.permissions` | 权限查询 | `has()`, `request()` |
-| `ctx.ui` | 动态 UI 能力（对话框、消息提示等） | `showMessage()`, `showConfirm()`, `showInput()` |
+| 命名空间 | 用途 | v1 可用方法 | 引入任务 |
+|---|---|---|---|
+| `ctx.manifest` | 本插件 manifest 快照（只读） | — | TASK-002 |
+| `ctx.apiVersion` | 当前 ctx API 主版本（只读） | — | TASK-002 |
+| `ctx.logger` | 日志 | `debug/info/warn/error(msg, ...args)` | TASK-002 |
+| `ctx.events` | 事件总线（发布/订阅） | `on(event, handler): unsubscribe`、`off(event, handler)`、`emit(event, ...args)` | TASK-002 |
+| `ctx.services` | 服务注册表（请求/响应） | `register(name, service)`、`get(name): service`、`has(name): boolean` | TASK-002 |
 
-**事件命名规范**：`命名空间:动作`，如 `app:started`、`app:will-unmount`、`theme:changed`。  
+**后续 minor 版本将追加**（不破坏已有插件）：
+
+- `ctx.commands` / `ctx.panels`（TASK-006 壳插件）
+- `ctx.storage` / `ctx.config`（TASK-004 profile 引擎）
+- `ctx.permissions`（TASK-008 权限授权）
+- `ctx.ui`（TASK-006 壳对话框与消息提示）
+
+类型定义见 `packages/kernel/src/types.ts` 中 `PluginContext`。
+
+**事件命名规范**：`命名空间:动作`，如 `app:started`、`app:will-unmount`、`theme:changed`。
 **服务命名规范**：小写字母与连字符，如 `theme`、`storage`、`clipboard`。
 
 ---
