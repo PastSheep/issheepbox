@@ -1,0 +1,21 @@
+{
+  "id": "org.issheepbox.example.file-stats",
+  "name": "文件文本统计",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "TASK-009 官方示例插件：带权限形态（files:read），经 approval-policy 授权后注册 file-stats 服务",
+  "author": "Is Sheep Box",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "permissions": ["files:read"],
+  "requires": {},
+  "contributes": {
+    "services": [
+      {
+        "name": "file-stats",
+        "version": "1.0.0",
+        "description": "文本统计服务：行数/词数/字符数/字节数（需 files:read 授权）"
+      }
+    ]
+  }
+}
