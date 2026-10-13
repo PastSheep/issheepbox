@@ -1,0 +1,34 @@
+{
+  "id": "org.issheepbox.approval-policy",
+  "name": "权限授权",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "第一方基础设施插件：解析插件 manifest.permissions，安装/启用时展示权限清单并请求用户授权（approval policy）",
+  "author": "Is Sheep Box",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "permissions": [],
+  "contributes": {
+    "services": [
+      {
+        "name": "approval-policy",
+        "version": "1.0.0",
+        "description": "授权判定服务：解析权限声明、请求用户授权、运行时权限校验"
+      }
+    ],
+    "events": [
+      {
+        "name": "approval:requested",
+        "description": "安装/启用流程请求授权时发布；载荷 { pluginId, pluginName, permissions, source? }"
+      },
+      {
+        "name": "approval:granted",
+        "description": "用户授权通过时发布；载荷 { pluginId, permissions, auto? }"
+      },
+      {
+        "name": "approval:denied",
+        "description": "用户拒绝时发布；载荷 { pluginId, permissions, reason? }"
+      }
+    ]
+  }
+}

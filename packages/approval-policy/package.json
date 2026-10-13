@@ -1,0 +1,21 @@
+{
+  "name": "@issheepbox/approval-policy",
+  "version": "0.0.0",
+  "description": "第一方基础设施插件：权限声明解析 + 安装授权（approval policy，TASK-008）",
+  "license": "UNLICENSED",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  }
+}
