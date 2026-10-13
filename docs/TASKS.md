@@ -20,13 +20,15 @@
 ## MVP 任务（来源：docs/requirements.md）
 
 ### TASK-001：工程脚手架（monorepo + TS + Electron）
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-kernel
+- 分支：agent-kernel/feat-scaffold
 - 需求描述：初始化 monorepo 工程：`packages/kernel`（自研内核）、`packages/shell-default`（最小默认壳插件）、`packages/market-client`（市场客户端）、`packages/plugins/*`（示例插件）、`apps/desktop`（Electron 宿主入口）。TypeScript 严格模式，统一构建脚本（pnpm workspace 或等价方案），Electron 应用可启动空窗口。
 - 验收标准：`npm run dev`（或等价）能启动 Electron 空窗口；各 package 可独立构建；lint/typecheck 通过；CI 脚本占位（lint + typecheck）。
 - 依赖：无
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `24d9688`），远端分支已删除。
+- **待办（CI 后续）**：CI 流水线当前仅跑 typecheck+lint，build/test/electron-packager 步骤待后续任务追加。
 
 ### TASK-002：内核·插件加载器与 ctx API v1
 - 状态：待派发
