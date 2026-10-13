@@ -13,8 +13,9 @@ v1，draft-07 JSON Schema）拉取并解析 `plugins.json`，提供插件列表�
 import { MarketClient } from '@issheepbox/market-client';
 
 const client = new MarketClient({
-  // 默认使用占位常量 DEFAULT_REGISTRY_URL；真实 GitHub 组织/仓库名待需求方提供
-  registryUrl: 'https://raw.githubusercontent.com/<org>/<repo>/main/plugins.json',
+  // 默认使用 DEFAULT_REGISTRY_URL（PastSheep/issheepbox-registry 的 raw 索引）；
+  // 也可在此传入其他 registry 地址覆盖
+  registryUrl: 'https://raw.githubusercontent.com/PastSheep/issheepbox-registry/main/plugins.json',
 });
 
 const result = await client.fetchIndex(); // 网络失败抛 RegistryFetchError；解析失败不抛

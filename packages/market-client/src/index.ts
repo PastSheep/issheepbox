@@ -3,7 +3,7 @@
  *
  * 本任务交付范围（见 TASKS.md TASK-007）：
  *  1. 按 docs/plugin-registry-schema.md（draft-07 JSON Schema）拉取并解析
- *     registry 索引 plugins.json（默认 URL 为占位常量，见下）。
+ *     registry 索引 plugins.json（默认 URL 见 DEFAULT_REGISTRY_URL）。
  *  2. 查询接口：list() 按条件过滤、getById() 精确查询；解析非法条目容错
  *     （非法条目被拒绝并记录原因，不抛异常、不影响其余条目）。
  *  3. 下载/安装/卸载/更新动作依赖后续任务（插件打包、registry 仓库落地、
@@ -26,14 +26,13 @@ export { parseRegistryIndex, SUPPORTED_REGISTRY_VERSIONS } from './parse';
 export { compareVersions, parseSemver } from './versions';
 
 /**
- * registry 索引默认地址（占位常量）。
+ * registry 索引默认地址。
  *
- * ⚠️ 待需求方提供 GitHub 组织/仓库名后替换为真实地址，例如：
- *    https://raw.githubusercontent.com/<org>/<repo>/main/plugins.json
- * 替换后可在构造 MarketClient 时传入真实 URL，或直接修改本常量。
+ * 指向官方 registry 仓库（PastSheep/issheepbox-registry）的 raw 索引文件，
+ * 该地址已实测返回 200。构造 MarketClient 时仍可传入 registryUrl 覆盖。
  */
 export const DEFAULT_REGISTRY_URL =
-  'https://raw.githubusercontent.com/REPLACE_ORG/REPLACE_REPO/main/plugins.json';
+  'https://raw.githubusercontent.com/PastSheep/issheepbox-registry/main/plugins.json';
 
 /** 默认拉取超时（毫秒）。 */
 const DEFAULT_TIMEOUT_MS = 15_000;
