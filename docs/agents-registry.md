@@ -8,10 +8,12 @@
 
 ## 新增 agent 步骤
 
+执行 agent 由**需求方选择并接入**（可能为豆包或外部平台 agent，主 agent 不派发开发任务）。接入流程：
+
 ```powershell
 git clone E:\Projects\IsSheepBox\repo.git E:\Projects\IsSheepBox\workspaces\<agent-name>
 ```
 
-1. 在上述表格中登记。
+1. 在上述表格中登记（可由需求方或该 agent 自行登记）。
 2. 新 agent 开工前通读 `README.md`、`AGENTS.md`、`docs/` 全部文档。
 3. agent 分支命名见 `docs/conventions.md`。
