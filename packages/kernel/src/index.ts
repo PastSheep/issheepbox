@@ -6,14 +6,12 @@
  *  - 不渲染任何业务 UI、不实现任何工具能力、不绑定具体壳、不假设插件来源。
  *
  * TASK-002 已交付：PluginLoader、EventBus/ServiceRegistry 最小实现、ctx v1 类型。
- * TASK-003 已交付：LifecycleManager mount/unmount + 可逆 effects
- *  （插件注册的服务/事件监听在 unmount 时自动回滚，无残留）。
- *
- * 后续任务：
- *  - TASK-004：profile 配置引擎
- *  - TASK-005：apiVersion SemVer 范围校验与失败隔离测试
+ * TASK-003 已交付：LifecycleManager mount/unmount + 可逆 effects。
+ * TASK-004 已交付：ProfileEngine（持久化/热重载/快照/壳 fallback）。
+ * TASK-005 已交付：apiVersion SemVer 兼容性校验。
  */
 import { PluginLoader } from './loader';
+import type { LoadedPlugin } from './loader';
 import { LifecycleManager } from './lifecycle';
 import { ServiceRegistryImpl } from './services';
 import { EventBusImpl } from './events';
@@ -30,17 +28,43 @@ export class IsSheepBoxKernel {
   readonly events = new EventBusImpl();
   readonly lifecycle: LifecycleManager;
   readonly dependency = new DependencyResolver();
-  readonly profile = new ProfileEngine();
+  /** ProfileEngine 在 start() 时初始化（需要 userDataDir）。 */
+  profile!: ProfileEngine;
 
   constructor() {
-    // 共享 bus/registry 注入生命周期管理器：插件通过 ctx 注册的服务/事件
-    // 都落在这两个单例上，mount/unmount 时由 LifecycleManager 跟踪 effects。
     this.lifecycle = new LifecycleManager(this.events, this.services);
   }
 
-  /** 启动内核：加载 profile、扫描插件目录、mount 插件。TASK-004 接入。 */
-  async start(): Promise<void> {
-    throw new Error('IsSheepBoxKernel.start() 未实现：见 TASK-004');
+  /**
+   * 启动内核：
+   *  1. 初始化 ProfileEngine（读当前 profile）
+   *  2. 扫描 pluginsDir 发现可用插件
+   *  3. 按 profile 启用列表 mount 插件
+   *  4. 壳缺失/失败 → 安全模式 fallback
+   *
+   * @param userDataDir 用户数据目录（存 profiles/snapshots）
+   * @param pluginsDir 插件包目录
+   */
+  async start(userDataDir: string, pluginsDir: string): Promise<{
+    boot: import('./profile/types').BootResult;
+    discovered: LoadedPlugin[];
+    discoveryFailures: Array<{ dir: string; errors: string[] }>;
+  }> {
+    this.profile = new ProfileEngine({
+      userDataDir,
+      lifecycle: this.lifecycle,
+      events: this.events,
+    });
+
+    const discovery = this.loader.loadAll(pluginsDir);
+    this.profile.setAvailablePlugins(discovery.loaded);
+
+    const boot = await this.profile.boot();
+    return {
+      boot,
+      discovered: discovery.loaded,
+      discoveryFailures: discovery.failures,
+    };
   }
 
   /** 停止内核：unmount 所有插件并回滚 effects。 */
@@ -72,3 +96,11 @@ export {
   checkApiCompatibility,
 } from './compat';
 export type { CompatCheckResult } from './compat';
+export { ProfileEngine, DEFAULT_SHELL_ID } from './profile';
+export type {
+  Profile,
+  ProfileSnapshot,
+  PermissionStore,
+  BootResult,
+} from './profile/types';
+export { PermissivePermissionStore } from './profile/types';
