@@ -115,6 +115,7 @@
 - 验收标准：三个插件均可被内核加载、勾选启用、正常使用、卸载无残留；示范三种典型形态；代码可作第三方插件模板。
 - 依赖：TASK-006、TASK-008
 - 完成时间：
+- **分支登记（merger）**：远端已有 `origin/agent-examples/feat-plugins-examples`（TASK-011 合并时 fetch 发现），按策略保留不合并、不删除，待需求方确认 TASK-009 执行状态后对接。
 
 ### TASK-010：插件规范 v1 文档 + registry 仓库初始化
 - 状态：已完成
@@ -131,13 +132,22 @@
 - **待办（registry 仓库初始化）**：✅ 已销项（2026-10-13）。registry 仓库已初始化：`https://github.com/PastSheep/issheepbox-registry`（含 README、空 `plugins.json`（registryVersion=1.0.0/plugins=[]）、`schemas/plugins.schema.json`），raw 地址实测 HTTP 200；market-client `DEFAULT_REGISTRY_URL` 已落库为真实地址（见 TASK-007 条目 registry URL 落库记录）。
 
 ### TASK-011：Electron 打包与发布
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-kernel
+- 分支：agent-kernel/feat-packaging
 - 需求描述：配置 Electron 打包（Windows 安装包优先），内置最小默认壳与第一方基础设施插件；升级/启动失败回退机制；发布说明与版本策略（内核/插件 API SemVer）。
 - 验收标准：打包产物可安装并正常启动；默认壳可用；升级路径验证（旧 profile 快照回滚）。
 - 依赖：TASK-006、TASK-007
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `8823333`，来源提交 `91b31e4`），远端分支已删除。合并后复验：`pnpm install` exit 0、全工作区 `pnpm run typecheck` exit 0（与干净 main 基线一致）、`pnpm --filter @issheepbox/desktop run build` exit 0、`eslint apps/desktop` exit 0。合并后追加修复提交 `7296544`（见下）。
+- **合并后修复（merger）**：`7296544` chore(desktop)：lockfile 引入 electron-builder 但未在 pnpm-workspace.yaml allowBuilds 声明其传递依赖 electron-winstaller，导致 `pnpm install` 以 ERR_PNPM_IGNORED_BUILDS exit 1（CI release.yml 的 frozen-lockfile 安装同样会失败）；审批后 exit 0。处理方式沿用 P-002（esbuild）先例。
+- **基线核查结论（pre-existing typecheck 故障）**：任务方提交信息称「approval-policy 包存在 tsc 编译错误（找不到 @issheepbox/kernel）」。parent 已在干净 main（6c131a1）独立复跑全工作区 typecheck：exit 0、零错误（clean 后全量重建 3 次均 0），该错误无法复现。引入提交 4161a6d（TASK-008）接线完整（workspace 依赖 + tsconfig references + 根 tsconfig 挂接齐全）；错误仅能在单包非 build 模式（`npx tsc --noEmit -p packages/approval-policy`，kernel/dist 不存在 → TS2307）下复现，属任务方环境/用法问题。建议流程要求：typecheck 一律在 install 成功后从根目录 `pnpm run typecheck`，禁止裸跑单包 tsc。
+- **边界标注**（任务方声明 + 合并者登记）：
+  ① 本机未实际出包（无图形环境，未跑 electron-builder --win），CI release job 首次 tag 触发时验证打包链路；
+  ② 未配置代码签名，Windows SmartScreen 警告留后续任务；
+  ③ extraResources / directories.output 相对路径基准为 apps/desktop 目录：pack 脚本靠 `pnpm --filter @issheepbox/desktop run pack` 保证 cwd=apps/desktop 运行（CI 与本地均如此，release/ 落仓库根、与 release.yml 上传路径一致）；若从仓库根直接调 electron-builder 会错位；
+  ④ pre-existing typecheck 故障：经基线核查被驳回（见上条）；
+  ⑤ apps/desktop/src/main.ts 开发态 pluginsDir 经 `__dirname` 相对定位 monorepo packages/（无硬编码绝对路径，比任务方原声明边界更干净），生产态用 userData/plugins。
 
 ---
 
@@ -156,6 +166,10 @@
 ### P-003：修订 plugin-registry-schema.md 的 id pattern 对齐连字符
 - 状态：待处理
 - 说明：docs/plugin-registry-schema.md 第 5 节 id pattern（`^[a-z][a-z0-9]*(\.[a-z0-9]+)+$`）不含连字符，与权威规范冲突——docs/plugin-spec-v1.md 第 3.2 节 id 示例（com.example.my-tool）及 kernel manifest 校验（packages/kernel/src/manifest.ts）均接受连字符。TASK-007（agent-market）客户端已按规范权威放宽（parse.ts ID_RE 含 `-`，并有注释说明）。后续需修订 schema 的 id pattern 为 `^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$` 对齐，并回归 registry 机器校验流程。
+
+### P-004：内置插件 version 钉死 0.0.0，应用升级后不刷新
+- 状态：待处理
+- 说明：TASK-011 的 apps/desktop/src/main.ts 中 copyDirIfNewer 以「userData/plugins 与 resources/builtin-plugins 的 plugin.json version 一致则跳过覆盖」为幂等条件；但 packages/shell-default 与 packages/approval-policy 的 version 均钉死 0.0.0，后续应用升级重打安装包后两侧版本恒等，已展开到 userData 的内置插件不会被新版安装包刷新。MVP 首启无影响（首次展开逻辑正确），升级路径上的内置插件更新失效。修复方向：升级时按应用版本号记录展开标记、改为「resources 侧 buildId/版本戳更新即覆盖」，或在打包流水线中给内置插件自增版本。不随 TASK-011 修复（避免扩大范围），由后续适用任务顺带处理。
 
 ---
 
