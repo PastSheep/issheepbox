@@ -3,7 +3,10 @@
 > **版本**：v1.0.0  
 > **状态**：ctx API v1 已由 TASK-002 定稿；后续 minor 版本只增不破  
 > **适用范围**：所有第三方插件开发者、第一方插件开发者、内核实现者  
-> **最后更新**：2026-10-13
+> **最后更新**：2026-10-13  
+> **规范反馈修订（TASK-009）**：示例插件实现过程中发现并修订的规范问题，逐条见文末
+> 「规范反馈（TASK-009）」附录；涉及内核/壳实现缺口的部分登记为 docs/TASKS.md 跨任务待办
+> P-004 ~ P-008。
 
 本文档是 Is Sheep Box（以下简称 ISB）插件开发的唯一权威规范。一个第三方开发者仅依赖本文档即可从零开发出合规插件，无需与项目维护者额外沟通。
 
@@ -116,7 +119,9 @@ my-note-plugin/
 #### `id`
 
 - **格式**：反向域名风格，全小写，点号分隔。
-- **规则**：`[a-z][a-z0-9]*(\.[a-z0-9]+)+`，至少两级（如 `com.example.my-tool`）。
+- **规则**：`[a-z][a-z0-9-]*(\.[a-z0-9-]+)+`，至少两级（如 `com.example.my-tool`）。
+  连字符允许（与 kernel `packages/kernel/src/manifest.ts` 的 `ID_RE` 一致；
+  修订记录见文末规范反馈 F-003）。
 - **唯一性**：全局唯一，registry 中不得重复。同名插件以后来者为准被拒绝上架。
 - **示例**：
   - `org.issheepbox.note`
@@ -331,17 +336,25 @@ export default async function main(ctx: PluginContext): Promise<void> {
 | `ctx.events` | 事件总线（发布/订阅） | `on(event, handler): unsubscribe`、`off(event, handler)`、`emit(event, ...args)` | TASK-002 |
 | `ctx.services` | 服务注册表（请求/响应） | `register(name, service)`、`get(name): service`、`has(name): boolean` | TASK-002 |
 
-**后续 minor 版本将追加**（不破坏已有插件）：
+**后续 minor 版本将追加**（不破坏已有插件；截至 TASK-009 均**未交付**，
+修订说明见文末规范反馈 F-002）：
 
-- `ctx.commands` / `ctx.panels`（TASK-006 壳插件）
-- `ctx.storage` / `ctx.config`（TASK-004 profile 引擎）
-- `ctx.permissions`（TASK-008 权限授权）
-- `ctx.ui`（TASK-006 壳对话框与消息提示）
+- `ctx.commands` / `ctx.panels` — 未交付。v1 可用的 UI seam 是默认壳注册的
+  `shell:ui` **service**（TASK-006：`registerPanel(panelId, title)`），经
+  `ctx.services.get('shell:ui')` 使用。
+- `ctx.storage` / `ctx.config` — 未交付（TASK-004 仅交付 ProfileEngine 配置引擎，
+  未暴露 `ctx.storage`）。
+- `ctx.permissions` — 未交付（TASK-008 交付的是 `approval-policy` **service**：
+  `requestApprovalForManifest / checkPermission / isApproved / revoke` 等）。
+- `ctx.ui` — 未交付。
 
 类型定义见 `packages/kernel/src/types.ts` 中 `PluginContext`。
 
 **事件命名规范**：`命名空间:动作`，如 `app:started`、`app:will-unmount`、`theme:changed`。
 **服务命名规范**：小写字母与连字符，如 `theme`、`storage`、`clipboard`。
+**UI seam 说明（v1）**：工具插件注册面板/工具箱入口走 `shell:ui` 服务
+（`ctx.services.get('shell:ui').registerPanel(...)`），不直接操作 DOM；
+面板记录为宿主侧状态，不参与内核可逆 effects（见规范反馈 F-006 / P-006）。
 
 ---
 
@@ -357,16 +370,26 @@ export default async function main(ctx: PluginContext): Promise<void> {
 | **stop** | 用户禁用插件 / 卸载前 | 可做收尾（但 effects 由内核自动回滚） |
 | **unmount** | 完全卸载，资源释放 | — |
 
+> **实现状态（TASK-009 修订）**：v1 内核（LifecycleManager）实际只实现
+> **load → mount → unmount** 三段（`PluginState` 仅出现 `mounted` / `unmounted`）；
+> `start` / `stop` 为设计目标，尚未暴露生命周期钩子。插件代码无需依赖 start/stop
+> 语义（见规范反馈 F-005）。
+
 ### 5.2 可逆 effects（自动回滚）
 
 插件在 `mount` 阶段通过 `ctx` 注册的一切，都被内核记录为「effect」。卸载时内核自动撤销：
 
 - `ctx.events.on()` → 自动 `off()`
 - `ctx.services.register()` → 自动注销服务
-- `ctx.commands.register()` → 自动注销命令
-- `ctx.panels.open()` 注册的面板 → 自动关闭
+- `ctx.commands.register()` → 自动注销命令（**未交付**，见 F-002；v1 无此 API）
+- `ctx.panels.open()` 注册的面板 → 自动关闭（**未交付**，见 F-002；v1 无此 API）
 
 **插件开发者无需写 cleanup 函数**。这是 v1 的硬约定，也是与 Cordis/DSH 的重要区别——简化插件代码的同时保证卸载干净。
+
+> **v1 实际边界（TASK-009 修订）**：上述回滚仅覆盖内核可跟踪的
+> `ctx.events.on` / `ctx.services.register`。经 `shell:ui.registerPanel()`
+> 注册的面板记录在壳插件内部（宿主侧状态），**不**随插件卸载自动回滚
+> （见规范反馈 F-006 / TASKS.md P-006）。
 
 ---
 
@@ -408,6 +431,13 @@ export default async function main(ctx: PluginContext): Promise<void> {
   → 授权结果持久化到 profile
   → 插件运行时，ctx 调用受权限约束
 ```
+
+> **v1 集成点（TASK-009 修订）**：实际流程由「宿主/调用方」经
+> `approval-policy` 服务完成——先 `requestApprovalForManifest(manifest)`，
+> 返回 `granted` 才 `profile.enable(pluginId)`；拒绝则不可启用。ProfileEngine
+> 的 `enable()` **尚未**强制查询授权（`opts.permissions` 为占位，见
+> docs/TASKS.md P-005）；"运行时越权调用被拒绝"由插件自检
+> `approval-policy.checkPermission()` 兜底（见 file-stats 示例插件与 F-007）。
 
 ### 7.2 权限最佳实践
 
@@ -482,13 +512,17 @@ plugin-name-x.y.z.zip
 |---|---|---|
 | 1 | `plugin.json` 存在且为合法 JSON | 拒绝，日志报错 |
 | 2 | 必填字段齐全：`id` / `name` / `version` / `apiVersion` / `entry` | 拒绝，提示缺哪个字段 |
-| 3 | `id` 格式合规（反向域名） | 拒绝 |
+| 3 | `id` 格式合规（反向域名，允许连字符） | 拒绝 |
 | 4 | `version` 是合法 SemVer | 拒绝 |
 | 5 | `apiVersion` range 与当前内核 ctx 主版本兼容 | 拒绝，提示版本不匹配 |
 | 6 | `entry` 指向的文件存在于包内 | 拒绝 |
 | 7 | `requires` 中所有依赖插件已安装且版本满足 | 拒绝，提示缺哪个依赖 |
 | 8 | 依赖图无环 | 拒绝 |
 | 9 | 入口模块能成功加载并 resolve `main()` | 拒绝，不影响其他插件 |
+
+> **实现状态（TASK-009 修订）**：#1~#6、#9 已由内核实现；**#7/#8 未实现**
+> （`DependencyResolver` 为占位骨架，loader 不解析 `requires`，见规范反馈 F-004）。
+> 依赖缺失/循环依赖目前不阻塞加载，第三方插件请勿依赖该保护。
 
 **失败隔离**：以上任何一条失败，仅该插件被禁用，宿主与其他插件正常运行。
 
@@ -542,27 +576,38 @@ note-plugin/
 
 ### 11.3 src/index.ts
 
+> **规范反馈修订（F-001，TASK-009）**：初版示例使用了尚未交付的
+> `ctx.commands` / `ctx.panels` / `ctx.storage`，无法在 v1 内核运行。
+> 以下为按 v1 实际接口面（`manifest / apiVersion / logger / events / services`）
+> 修订的**可运行**版本；完整可运行实现见 `packages/plugins/note`（TASK-009）。
+
 ```typescript
-export default async function main(ctx: any) {
-  // 读取已保存的便签内容
-  const saved = await ctx.storage.get('content') ?? '';
+import type { PluginContext } from '@issheepbox/kernel';
 
-  // 注册「新建便签」命令
-  ctx.commands.register('note-new', async () => {
-    await ctx.panels.open('note-main');
-    // 通知面板渲染最新内容
-    ctx.events.emit('note:render', { content: saved });
+export default async function main(ctx: PluginContext): Promise<void> {
+  // 1) 经 shell:ui seam 注册面板（v1 唯一 UI 入口；壳未挂载时优雅降级）
+  if (ctx.services.has('shell:ui')) {
+    const ui = ctx.services.get<{ registerPanel(id: string, title: string): void }>('shell:ui');
+    ui.registerPanel('note-main', '我的便签');
+  }
+
+  // 2) 命令事件示范：宿主/其他插件触发 note:new，本插件响应
+  ctx.events.on('note:new', () => {
+    ctx.events.emit('note:created', { at: Date.now() });
+    ctx.logger.info('已创建新便签');
   });
 
-  // 监听面板内发来的「内容更新」消息
-  ctx.events.on('note:content-updated', async (content: string) => {
-    await ctx.storage.set('content', content);
-    ctx.logger.info('便签已保存');
+  // 3) 面板内容更新消息（面板经 ctx 子集发来；持久化待 ctx.storage 交付）
+  ctx.events.on('note:content-updated', (content: unknown) => {
+    ctx.logger.info(`便签内容已更新（${typeof content === 'string' ? content.length : 0} 字符）`);
   });
 
-  ctx.logger.info('便签插件 v1.0.0 已启动');
+  ctx.logger.info(`便签插件 v${ctx.manifest.version} 已启动（ctx apiVersion=${ctx.apiVersion}）`);
 }
 ```
+
+> 可运行验证：仓库 `packages/plugins/verify-examples.cjs` 驱动真实内核，
+> 覆盖加载 / 启用 / 面板注册 / 事件收发 / 卸载无残留。
 
 ### 11.4 panel/note.html
 
@@ -604,6 +649,10 @@ export default async function main(ctx: any) {
 </html>
 ```
 
+> **v1 边界（F-006）**：`shell:ui.registerPanel` 目前仅记录面板清单，未实现
+> webview 挂载；面板 HTML 随包交付，待壳接入后由宿主加载。面板注册是宿主侧
+> 状态，不随插件卸载自动回滚（见 5.2 节与 TASKS.md P-006）。
+
 ### 11.5 构建后产物（zip 内容）
 
 ```
@@ -638,5 +687,30 @@ org.example.note-1.0.0.zip
 ---
 
 > **下一步**：  
-> - TASK-009 示例插件验证后，根据实际开发体验修订本文档。  
+> - TASK-009 示例插件验证后，根据实际开发体验修订本文档（已完成，见下附录）。  
 > - registry 仓库地址确定后，补充第 9.3 节发布流程中的具体仓库链接。
+
+---
+
+## 附录：规范反馈（TASK-009）
+
+> 由 `agent-examples` 在实现三个示例插件（note / file-stats / theme-service）时
+> 对照内核与壳实现发现，按「位置 / 问题 / 建议修订」登记。本附录随本分支修订；
+> 其中归属内核/壳实现缺口的项已登记 docs/TASKS.md 跨任务待办 P-004 ~ P-008。
+
+| # | 位置 | 问题 | 建议修订 / 去向 |
+|---|---|---|---|
+| F-001 | §11.3 完整示例 | 示例使用未交付的 `ctx.commands` / `ctx.panels` / `ctx.storage`，第三方照抄无法运行 | 已重写为 v1 可运行版本（shell:ui seam + events/services），指向 `packages/plugins/note` |
+| F-002 | §4.2 后续追加表 / §5.2 回滚表 | 表中 `ctx.commands`/`ctx.panels`（标注 TASK-006）、`ctx.storage`/`ctx.config`（标注 TASK-004）、`ctx.permissions`（标注 TASK-008）、`ctx.ui` 均未交付；TASK-006 实际交付 `shell:ui` service、TASK-008 实际交付 `approval-policy` service | 已修订：注明未交付状态，v1 UI seam = `shell:ui` service、权限服务 = `approval-policy` service |
+| F-003 | §3.2 `id` 规则 | 正则 `[a-z][a-z0-9]*(\.[a-z0-9]+)+` 不含连字符，与示例 `com.example.my-tool`、kernel `ID_RE`（含 `-`）、§10 #3 及 P-003（registry schema）冲突 | 已修订：正则改为 `[a-z][a-z0-9-]*(\.[a-z0-9-]+)+`；P-003 待修订 registry schema 对齐 |
+| F-004 | §10 校验 #7/#8 | `requires` 依赖校验与依赖图无环**未实现**（DependencyResolver 占位，loader 不解析 requires） | 已修订：校验表标注实现状态；建议后续任务实现 DependencyResolver 或明确降级为文档声明 |
+| F-005 | §5.1 生命周期 | `start` / `stop` 阶段未实现（LifecycleManager 仅 load→mount→unmount；`PluginState` 只出现 mounted/unmounted） | 已修订：标注 start/stop 为设计目标；建议后续 minor 暴露生命周期钩子时补语义 |
+| F-006 | §5.2 / §6.2 / shell:ui seam | `shell:ui.registerPanel` 仅向壳内数组 push，无 unregister、不参与内核 effect scope → 插件卸载后面板记录残留，与「卸载无残留」契约不符 | 已修订：文档标注 v1 边界；登记 **P-006**：建议 shell:ui 的 registerPanel 返回 unregister 或由内核/壳做 effect 包装 |
+| F-007 | §7.1 权限工作流 | ProfileEngine.enable 未强制查询授权（`opts.permissions` 为占位 void），“拒绝后不可启用”依赖宿主流程先经 approval-policy 请求授权 | 已修订：文档标注 v1 集成点（宿主门禁 + 插件运行时自检）；登记 **P-005**：建议 ProfileEngine 接入 PermissionStore/approval-policy |
+| F-008 | §9.1 / files:read | 规范禁止插件使用 node:fs，但 v1 无宿主 `files` 能力服务，`files:read` 插件无实际文件读取通道（file-stats 采用“宿主经服务/事件传入文本内容”沙箱模式） | 登记 **P-008**：建议提供受 approval-policy 约束的宿主 files capability service |
+| F-009 | §3.3 示例 manifest | `permissions` 含 `storage:plugin`，与「默认授予、无需声明」表述有张力（无害） | 建议后续示例注明 `storage:plugin` 可省略 |
+| F-010 | §4.2 `ctx.apiVersion` | 内核注入值为 `'1.0'`（lifecycle `createScopedCtx`），而 `CURRENT_API_VERSION='1.0.0'`；插件读取到非完整 SemVer | 登记 **P-007**：建议内核注入 `CURRENT_API_VERSION` 全值 |
+
+**验证基线**：`packages/plugins/verify-examples.cjs` 驱动真实内核，47 项断言 × 5 场景
+全部通过（加载 / enable / 使用 / unmount 无残留 / 权限拒绝路径 / 授权路径 /
+FailSafe 默认拒绝 / 运行时 fail-safe）；`pnpm typecheck`、`pnpm lint` 均 exit 0。

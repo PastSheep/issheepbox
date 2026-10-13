@@ -115,6 +115,11 @@
 - 验收标准：三个插件均可被内核加载、勾选启用、正常使用、卸载无残留；示范三种典型形态；代码可作第三方插件模板。
 - 依赖：TASK-006、TASK-008
 - 完成时间：
+- **执行汇报（agent-examples，待合并）**：
+  - 分支：`agent-examples/feat-plugins-examples`
+  - 交付：`packages/plugins/note`（纯 UI 面板，无权限）、`packages/plugins/file-stats`（files:read 权限）、`packages/plugins/theme-service`（theme 服务 + theme:changed 事件）；验证脚本 `packages/plugins/verify-examples.cjs`；规范反馈修订 docs/plugin-spec-v1.md（附录 F-001~F-010）与 P-004~P-008 登记。
+  - 验证：`pnpm typecheck` / `pnpm lint` exit 0；验证脚本 47 项断言 × 5 场景全部通过（加载 / enable / 使用 / unmount 无残留 / 权限拒绝路径 / 授权路径 / FailSafePrompter 默认拒绝 / 运行时 fail-safe）。
+  - 已知 seam 缺口：shell:ui 面板记录不随插件卸载回滚（P-006，脚本按当前行为断言并标注）。
 
 ### TASK-010：插件规范 v1 文档 + registry 仓库初始化
 - 状态：已完成
@@ -156,6 +161,31 @@
 ### P-003：修订 plugin-registry-schema.md 的 id pattern 对齐连字符
 - 状态：待处理
 - 说明：docs/plugin-registry-schema.md 第 5 节 id pattern（`^[a-z][a-z0-9]*(\.[a-z0-9]+)+$`）不含连字符，与权威规范冲突——docs/plugin-spec-v1.md 第 3.2 节 id 示例（com.example.my-tool）及 kernel manifest 校验（packages/kernel/src/manifest.ts）均接受连字符。TASK-007（agent-market）客户端已按规范权威放宽（parse.ts ID_RE 含 `-`，并有注释说明）。后续需修订 schema 的 id pattern 为 `^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$` 对齐，并回归 registry 机器校验流程。
+
+### P-004：内核·依赖解析（requires 校验 / 拓扑排序）未实现
+- 状态：待处理
+- 来源：TASK-009 规范反馈 F-004（agent-examples）
+- 说明：docs/plugin-spec-v1.md §10 校验清单 #7（requires 依赖已安装且版本满足）/ #8（依赖图无环）标注为已实现，但 `packages/kernel/src/dependency/` 仍是占位骨架（resolveOrder 抛「未实现」），loader 不解析 `requires`。建议后续任务实现 DependencyResolver 并接入 loader，或在规范中明确降级为文档声明。
+
+### P-005：ProfileEngine.enable 未接入权限校验
+- 状态：待处理
+- 来源：TASK-009 规范反馈 F-007（agent-examples）
+- 说明：`packages/kernel/src/profile/index.ts` 构造函数接收 `opts.permissions` 但仅 `void opts.permissions`（TASK-008 边界标注「权限校验留后续集成」）；"拒绝后插件不可启用"目前依赖宿主/调用方先经 `approval-policy.requestApprovalForManifest` 再 enable（TASK-009 验证脚本按此门禁实现）。建议 ProfileEngine.enable 在 mount 前查询授权（granted 才启用），并把授权记录持久化进 profile 或注入持久化 ApprovalStore。
+
+### P-006：shell:ui 面板注册无回滚（宿主侧状态残留）
+- 状态：待处理
+- 来源：TASK-009 规范反馈 F-006（agent-examples）
+- 说明：`packages/shell-default/src/index.ts` 的 `registerPanel` 仅向内部 `panels` 数组 push，无 unregister、不参与内核 EffectScope；插件卸载后其面板记录不自动回滚，与规范 §5.2「卸载无残留」契约不符（TASK-009 验证脚本已按当前行为断言并标注）。建议：registerPanel 返回 unregister 函数，或由内核/壳对面板注册做 effect 包装；同时可考虑把面板声明来源（manifest ui.panels）纳入壳记录以支持自动回滚。
+
+### P-007：ctx.apiVersion 注入值非完整 SemVer
+- 状态：待处理
+- 来源：TASK-009 规范反馈 F-010（agent-examples）
+- 说明：`packages/kernel/src/lifecycle/index.ts` 的 `createScopedCtx` 注入 `apiVersion: '1.0'`，而 `CURRENT_API_VERSION='1.0.0'`（compat.ts）；插件读取 `ctx.apiVersion` 得到非完整 SemVer。建议内核注入 `CURRENT_API_VERSION` 全值，避免插件侧版本判断歧义。
+
+### P-008：files:read 等权限缺少可消费的宿主能力服务
+- 状态：待处理
+- 来源：TASK-009 规范反馈 F-008（agent-examples）
+- 说明：规范 §9.1 禁止插件打包 Node 内置模块（fs/path），但 v1 无宿主 `files` 能力服务，带 `files:read` 的插件无实际文件读取通道（TASK-009 的 file-stats 示例采用「宿主经服务/事件传入文本内容」的沙箱模式）。建议后续任务提供受 approval-policy 约束的宿主 files capability service（files:read → 仅读、files:write → 仅写），作为权限语义的落地通道。
 
 ---
 
