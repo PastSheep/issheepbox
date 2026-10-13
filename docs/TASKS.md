@@ -53,13 +53,15 @@
 - **边界标注**：本任务不实现 TASK-004 profile 配置引擎 / TASK-005 apiVersion 比对 / TASK-002 依赖拓扑排序。
 
 ### TASK-004：内核·profile 配置引擎
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-kernel
+- 分支：agent-kernel/feat-kernel-profile
 - 需求描述：实现 profile：命名组合（启用的插件 ID 列表 + 每插件配置）的持久化、加载、切换；运行时启停插件并热重载（HMR）；启动时按 profile 加载壳插件，失败/缺失则回退到内置最小默认壳（安全模式）；升级/变更前自动快照。
 - 验收标准：创建/保存/切换多个 profile 均生效；勾选启停即时生效；壳加载失败自动回退默认壳；快照可恢复。
 - 依赖：TASK-003
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `a72f09f`），远端分支已删除。功能复跑验收 25 项全部通过（临时目录造 org.example.tool 插件驱动内核：start 发现插件、无壳时 safeMode=true 且 activeShell=DEFAULT_SHELL_ID 并 emit app:safe-mode、enable/disable 即时 mount/unmount 且 effects 回滚、create+switchTo 切换生效且 current.json 指针持久化、变更前自动快照、restore 恢复 enabled 并重新挂载）。
+- **边界标注**：默认壳 UI 本体留 TASK-006（本任务只交付 safeMode fallback 机制 + DEFAULT_SHELL_ID 占位）；实际权限校验留 TASK-008（本任务只定义 PermissionStore 接口 + PermissivePermissionStore 全量放行占位）。
 
 ### TASK-005：内核·兼容性校验与失败隔离
 - 状态：已完成
