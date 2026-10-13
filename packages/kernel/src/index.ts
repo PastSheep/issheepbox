@@ -5,13 +5,11 @@
  *  - 只做四件事：插件加载、生命周期与依赖、services/events、profile 配置。
  *  - 不渲染任何业务 UI、不实现任何工具能力、不绑定具体壳、不假设插件来源。
  *
- * TASK-002 已交付：
- *  - PluginLoader：扫描目录、解析 manifest、require 入口模块，失败隔离
- *  - EventBus / ServiceRegistry：跨插件事件与服务最小实现
- *  - ctx API v1 类型（见 types.ts PluginContext）
+ * TASK-002 已交付：PluginLoader、EventBus/ServiceRegistry 最小实现、ctx v1 类型。
+ * TASK-003 已交付：LifecycleManager mount/unmount + 可逆 effects
+ *  （插件注册的服务/事件监听在 unmount 时自动回滚，无残留）。
  *
- * 后续任务继续填充：
- *  - TASK-003：生命周期 mount/unmount + 可逆 effects
+ * 后续任务：
  *  - TASK-004：profile 配置引擎
  *  - TASK-005：apiVersion SemVer 范围校验与失败隔离测试
  */
@@ -21,42 +19,32 @@ import { ServiceRegistryImpl } from './services';
 import { EventBusImpl } from './events';
 import { DependencyResolver } from './dependency';
 import { ProfileEngine } from './profile';
-import { createLogger } from './logger';
-import type { PluginContext, PluginManifest } from './types';
 
 export class IsSheepBoxKernel {
   /** 当前内核暴露给插件的 ctx API 主版本（兼容性契约，见 requirements.md 4.5）。 */
   readonly apiVersion = '1.0' as const;
 
   readonly loader = new PluginLoader();
-  readonly lifecycle = new LifecycleManager();
   readonly services = new ServiceRegistryImpl();
   readonly events = new EventBusImpl();
+  readonly lifecycle: LifecycleManager;
   readonly dependency = new DependencyResolver();
   readonly profile = new ProfileEngine();
 
-  /**
-   * 为给定插件构造一个 ctx 实例（TASK-003 mount 时调用）。
-   * 共享 events/services 单例，插件间通过它们协作。
-   */
-  createContext(manifest: PluginManifest): PluginContext {
-    return {
-      apiVersion: this.apiVersion,
-      manifest,
-      logger: createLogger(manifest.id),
-      events: this.events,
-      services: this.services,
-    };
+  constructor() {
+    // 共享 bus/registry 注入生命周期管理器：插件通过 ctx 注册的服务/事件
+    // 都落在这两个单例上，mount/unmount 时由 LifecycleManager 跟踪 effects。
+    this.lifecycle = new LifecycleManager(this.events, this.services);
   }
 
-  /** 启动内核：加载 profile、扫描插件目录、装载壳插件。TASK-003/004 接入。 */
+  /** 启动内核：加载 profile、扫描插件目录、mount 插件。TASK-004 接入。 */
   async start(): Promise<void> {
-    throw new Error('IsSheepBoxKernel.start() 未实现：见 TASK-003 / TASK-004');
+    throw new Error('IsSheepBoxKernel.start() 未实现：见 TASK-004');
   }
 
-  /** 停止内核：卸载所有插件并回滚 effects。TASK-003 接入。 */
+  /** 停止内核：unmount 所有插件并回滚 effects。 */
   async stop(): Promise<void> {
-    throw new Error('IsSheepBoxKernel.stop() 未实现：见 TASK-003');
+    await this.lifecycle.unmountAll();
   }
 }
 
@@ -69,5 +57,11 @@ export type {
 } from './loader';
 export { EventBusImpl } from './events';
 export { ServiceRegistryImpl } from './services';
+export { LifecycleManager } from './lifecycle';
+export type {
+  MountOutcome,
+  MountAllResult,
+} from './lifecycle';
+export { EffectScope } from './effect-scope';
 export { parseManifest } from './manifest';
 export { createLogger } from './logger';

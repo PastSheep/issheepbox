@@ -117,3 +117,17 @@ export interface PluginModule {
   default?: PluginFactory;
   [key: string]: unknown;
 }
+
+/** 插件生命周期阶段。 */
+export type PluginState = 'mounted' | 'started' | 'stopped' | 'unmounted';
+
+/** 一个已 mount 的插件运行时实例。 */
+export interface MountedPlugin {
+  /** 插件 ID（manifest.id）。 */
+  readonly id: string;
+  readonly manifest: PluginManifest;
+  /** 注入给插件的 ctx（已包装 events/services 以跟踪 effects）。 */
+  readonly ctx: PluginContext;
+  /** 当前生命周期阶段。 */
+  state: PluginState;
+}
