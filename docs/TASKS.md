@@ -104,9 +104,9 @@
 - 状态：待派发
 - 负责 agent：待定
 - 分支：待定
-- 需求描述：输出插件规范 v1 正式文档（manifest 全字段、目录结构、发布要求、校验规则、示例）；定义 `plugins.json`（registry index）格式；初始化 GitHub registry 仓库（含 README 与首个示例条目）。
-- 验收标准：规范文档可指导第三方独立开发插件；plugins.json 格式有 schema 或文档；registry 仓库就绪。
-- 依赖：TASK-009
+- 需求描述：输出插件规范 v1 正式文档（manifest 全字段、目录结构、发布要求、校验规则、示例）；定义 `plugins.json`（registry index）格式；初始化 GitHub registry 仓库（含 README 与首个示例条目）。**规范先行**：草案先行定稿，manifest 字段与 TASK-002 的 ctx API v1 对齐（未完成时先按草案写、后续修订）；TASK-009 示例插件实现时验证规范并反馈修订。若需求方尚未提供 GitHub 仓库信息，先交付规范文档与格式定义，仓库初始化待信息就绪。
+- 验收标准：规范文档可指导第三方独立开发插件；plugins.json 格式有 schema 或文档；registry 仓库就绪（或已明确待办）。
+- 依赖：无（规范先行；TASK-009 负责验证反馈）
 - 完成时间：
 
 ### TASK-011：Electron 打包与发布
