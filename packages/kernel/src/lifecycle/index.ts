@@ -14,10 +14,11 @@
  * 失败隔离：单个插件 mount 抛错不影响其他插件，错误记录到 MountResult.failures。
  */
 import type {
-  LoadedPlugin,
   MountedPlugin as MountedPluginType,
   PluginContext,
+  PluginManifest,
 } from '../types';
+import type { LoadedPlugin } from '../loader';
 import { EventBusImpl } from '../events';
 import { ServiceRegistryImpl } from '../services';
 import { EffectScope } from '../effect-scope';
@@ -127,7 +128,7 @@ export class LifecycleManager {
    *  - ctx.services.register() 后自动登记 unregister 进 scope
    */
   private createScopedCtx(
-    manifest: import('../types').PluginManifest,
+    manifest: PluginManifest,
     scope: EffectScope,
   ): PluginContext {
     const bus = this.bus;
