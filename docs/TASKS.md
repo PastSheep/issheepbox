@@ -53,13 +53,15 @@
 - **边界标注**：本任务不实现 TASK-004 profile 配置引擎 / TASK-005 apiVersion 比对 / TASK-002 依赖拓扑排序。
 
 ### TASK-004：内核·profile 配置引擎
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-kernel
+- 分支：agent-kernel/feat-kernel-profile
 - 需求描述：实现 profile：命名组合（启用的插件 ID 列表 + 每插件配置）的持久化、加载、切换；运行时启停插件并热重载（HMR）；启动时按 profile 加载壳插件，失败/缺失则回退到内置最小默认壳（安全模式）；升级/变更前自动快照。
 - 验收标准：创建/保存/切换多个 profile 均生效；勾选启停即时生效；壳加载失败自动回退默认壳；快照可恢复。
 - 依赖：TASK-003
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `a72f09f`），远端分支已删除。功能复跑验收 25 项全部通过（临时目录造 org.example.tool 插件驱动内核：start 发现插件、无壳时 safeMode=true 且 activeShell=DEFAULT_SHELL_ID 并 emit app:safe-mode、enable/disable 即时 mount/unmount 且 effects 回滚、create+switchTo 切换生效且 current.json 指针持久化、变更前自动快照、restore 恢复 enabled 并重新挂载）。
+- **边界标注**：默认壳 UI 本体留 TASK-006（本任务只交付 safeMode fallback 机制 + DEFAULT_SHELL_ID 占位）；实际权限校验留 TASK-008（本任务只定义 PermissionStore 接口 + PermissivePermissionStore 全量放行占位）。
 
 ### TASK-005：内核·兼容性校验与失败隔离
 - 状态：已完成
@@ -132,9 +134,24 @@
 
 ---
 
+## 跨任务待办（pending）
+
+> 非阻塞项，由下一个适用任务顺带处理（prompt 附加项）。
+
+### P-001：修正 packages/kernel/src/index.ts 头部过时注释
+- 状态：已解决（销项）
+- 说明：TASK-005 已完成，index.ts 头部注释仍将其列为「后续任务」。TASK-004 合并时已顺带修正（现按序登记 TASK-002~005 均已交付），销项于 2026-10-13 由需求方确认。
+
+### P-002：pnpm esbuild 构建审批落库
+- 状态：待处理
+- 说明：vitest 传递依赖 esbuild 的安装脚本审批未写入仓库（仅本地临时 esbuild:false，未提交）。新环境 pnpm install 会再次弹出交互提示，CI（非交互）会卡住。由下一个执行 pnpm install 的任务在 pnpm-workspace.yaml 的 onlyBuiltDependencies（或等效字段）中显式声明并提交。推荐声明允许（esbuild 需 postinstall 下载平台二进制）；若实测不跑脚本可跑通，可声明禁止，但提交信息须说明理由与验证方式。
+
+---
+
 ## 状态说明
 
 - **待派发**：已登记，等待需求方选择执行 agent。
 - **开发中**：执行 agent 已在分支上工作。
 - **待合并**：分支已推送，等待合并者审查。
 - **已完成**：已合并进 main 并验证。
+- **待处理（P 开头）**：跨任务待办，由适用的下一个任务顺带处理。
