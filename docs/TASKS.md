@@ -31,13 +31,15 @@
 - **待办（CI 后续）**：CI 流水线当前仅跑 typecheck+lint，build/test/electron-packager 步骤待后续任务追加。
 
 ### TASK-002：内核·插件加载器与 ctx API v1
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-kernel
+- 分支：agent-kernel/feat-kernel-loader
 - 需求描述：实现插件加载器：扫描本地插件目录、解析 `plugin.json`（按 docs/requirements.md 第 5 节字段）、加载入口代码。定义并实现 `ctx` API v1（内核暴露给插件的服务接口，含注册服务、发布/订阅事件的最小集合）。输出 ctx API v1 的类型定义文件作为契约。
 - 验收标准：能扫描目录并加载合法插件；缺字段/格式错误的 manifest 报错且不影响其他插件；ctx v1 类型定义文档化。
 - 依赖：TASK-001
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `fcf2c2e`），远端分支已删除。
+- **待办**：① 插件工厂调用（mount/生命周期）→ TASK-003；② apiVersion SemVer range 比对（manifest 校验 #5）→ TASK-005；③ 文档清理：docs/plugin-spec-v1.md 文末「下一步」清单首条（「TASK-002 完成后，补充第 4.2 节 ctx API 完整方法签名与类型定义链接」）为过时 TODO，待后续清理。
 
 ### TASK-003：内核·生命周期 + services/events + 可逆 effects
 - 状态：待派发
