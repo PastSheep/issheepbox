@@ -41,7 +41,7 @@
    d. git push origin main
    e. git push origin --delete <agent-name>/<任务标识>   # 清理已合并分支
 4. 更新 docs/TASKS.md：任务状态 → 已完成
-5. 通知各 agent：main 已更新，请 pull 同步
+5. 向主 agent 汇报合并完成；**不做全局「请 pull 同步」广播**——各 agent 的同步由下一次任务 prompt 中的 pull 步骤承载（复用已存在 agent 时显式 pull，新启用 agent clone 即最新）
 ```
 
 ## 4. 冲突解决原则

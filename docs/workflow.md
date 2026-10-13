@@ -33,8 +33,11 @@
    └─ 需求方将执行 agent 的完成汇报转交主 agent；主 agent 派发合并子 agent
    └─ 合并子 agent 按 docs/merge-policy.md 审查、解决冲突、合并进 main、更新 TASKS.md、清理分支
    └─ 合并子 agent 向主 agent 汇报结果，主 agent 转达需求方
-⑦ 同步下一轮
-   └─ 各 agent pull 最新 main，继续下一个任务
+⑦ 下一轮派发
+   └─ 下一次启用 agent 时，任务 prompt 中必须包含「拉取最新 main」步骤：
+      复用已存在 agent → 显式 git fetch + git pull origin main；
+      新启用 agent → clone 即天然最新
+   └─ 合并后不做全局广播，避免噪音
 ```
 
 ## 3. 状态管理（仓库即记忆）
