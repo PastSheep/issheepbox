@@ -7,6 +7,7 @@
 | merger（主 agent） | `workspaces/merger` | `main` | active | 2026-10-13 | 合并者，唯一 main 写者 |
 | agent-kernel | `workspaces/agent-kernel` | 待创建 | active | 2026-10-13 | TASK-001 脚手架；后续承包内核主线 TASK-002~005 |
 | agent-spec | `workspaces/agent-spec` | 待创建 | active | 2026-10-13 | TASK-010 插件规范 v1 草案 |
+| agent-permission | `workspaces/agent-permission` | `agent-permission/feat-permission` | active | 2026-10-13 | TASK-008 权限声明与安装授权（approval policy） |
 
 ## 新增 agent 步骤
 
