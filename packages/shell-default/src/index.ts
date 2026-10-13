@@ -1,4 +1,4 @@
-import type { PluginInstance } from '@issheepbox/kernel';
+import type { PluginContext } from '@issheepbox/kernel';
 
 /**
  * 最小默认壳插件（占位）。
@@ -9,15 +9,8 @@ import type { PluginInstance } from '@issheepbox/kernel';
  *  - 插件启停开关
  *  - 第一方、预置、不可卸载的 fallback 壳
  *
- * 当前仅导出一个占位插件实例，保证包可独立构建。
+ * 当前仅导出一个占位工厂函数，保证包可独立构建。
  */
-const shellDefault: PluginInstance = {
-  mount(): void {
-    // TASK-006：注册壳 UI、容器 seam
-  },
-  unmount(): void {
-    // TASK-006：卸载时清理 UI 注册
-  },
-};
-
-export default shellDefault;
+export default function shellDefault(_ctx: PluginContext): void {
+  // TASK-006：注册壳 UI、容器 seam
+}
