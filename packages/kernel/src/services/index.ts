@@ -28,4 +28,12 @@ export class ServiceRegistryImpl implements ServiceRegistry {
   has(name: string): boolean {
     return this.services.has(name);
   }
+
+  /**
+   * 注销服务（由 effect scope 在插件 unmount 时调用）。
+   * 未注册的名字静默忽略。
+   */
+  unregister(name: string): void {
+    this.services.delete(name);
+  }
 }
