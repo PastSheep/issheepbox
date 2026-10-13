@@ -5,6 +5,8 @@
 | Agent 名称 | 工作区路径 | 当前分支 | 状态 | 加入日期 | 备注 |
 |---|---|---|---|---|---|
 | merger（主 agent） | `workspaces/merger` | `main` | active | 2026-10-13 | 合并者，唯一 main 写者 |
+| agent-kernel | `workspaces/agent-kernel` | 待创建 | active | 2026-10-13 | TASK-001 脚手架；后续承包内核主线 TASK-002~005 |
+| agent-spec | `workspaces/agent-spec` | 待创建 | active | 2026-10-13 | TASK-010 插件规范 v1 草案 |
 
 ## 新增 agent 步骤
 
