@@ -1,15 +1,15 @@
 /**
  * 插件加载器。
  *
- * 职责（TASK-002）：
+ * 职责：
  *  - 扫描本地插件目录（一层子目录即一个插件包）
  *  - 读取并解析 plugin.json（见 manifest.ts）
+ *  - 兼容性校验：apiVersion SemVer range 与当前内核版本比对（见 compat.ts）
  *  - require() 入口模块，校验默认导出是工厂函数
  *  - 失败隔离：单个插件解析/加载失败只记录到 failures，不影响其他插件
  *
  * 不做的事：
  *  - 不调用插件工厂（mount/生命周期由 TASK-003 负责）
- *  - 不做 apiVersion SemVer range 比对（TASK-005）
  *  - 不做依赖拓扑排序（见 dependency/ 占位）
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -17,6 +17,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { PluginManifest, PluginModule } from '../types';
 import { parseManifest } from '../manifest';
+import { checkApiCompatibility } from '../compat';
 
 // 用 createRequire 拿到 require 函数，避免 ESLint no-require-imports。
 const loadModule = createRequire(__filename);
@@ -106,6 +107,12 @@ export class PluginLoader {
     const { manifest, errors } = parseManifest(raw, dir);
     if (!manifest) {
       return { ok: false, errors };
+    }
+
+    // 兼容性校验：apiVersion SemVer range 与当前内核 ctx API 版本比对
+    const compat = checkApiCompatibility(manifest.apiVersion, dir);
+    if (!compat.compatible) {
+      return { ok: false, errors: [compat.error!] };
     }
 
     const entryAbs = path.join(dir, manifest.entry);

@@ -22,11 +22,12 @@ import { EventBusImpl } from './events';
 import { DependencyResolver } from './dependency';
 import { ProfileEngine } from './profile';
 import { createLogger } from './logger';
+import { CURRENT_API_VERSION } from './compat';
 import type { PluginContext, PluginManifest } from './types';
 
 export class IsSheepBoxKernel {
-  /** 当前内核暴露给插件的 ctx API 主版本（兼容性契约，见 requirements.md 4.5）。 */
-  readonly apiVersion = '1.0' as const;
+  /** 当前内核暴露给插件的 ctx API 版本（兼容性契约，见 requirements.md 4.5）。 */
+  readonly apiVersion = CURRENT_API_VERSION;
 
   readonly loader = new PluginLoader();
   readonly lifecycle = new LifecycleManager();
@@ -71,3 +72,9 @@ export { EventBusImpl } from './events';
 export { ServiceRegistryImpl } from './services';
 export { parseManifest } from './manifest';
 export { createLogger } from './logger';
+export {
+  CURRENT_API_VERSION,
+  validateApiVersionRange,
+  checkApiCompatibility,
+} from './compat';
+export type { CompatCheckResult } from './compat';
