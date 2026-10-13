@@ -1,0 +1,46 @@
+name: Release
+
+# 打 v* tag 时触发：构建 Windows NSIS 安装包并上传到 GitHub Release。
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Build Windows installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm --filter @issheepbox/desktop run pack
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe
+          generate_release_notes: true

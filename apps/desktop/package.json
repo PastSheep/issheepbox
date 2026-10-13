@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc --build",
     "dev": "tsc --build && electron dist/main.js",
-    "clean": "tsc --build --clean"
+    "clean": "tsc --build --clean",
+    "pack": "tsc --build && electron-builder --win --config electron-builder.yml"
   },
   "dependencies": {
     "@issheepbox/kernel": "workspace:*"
@@ -15,6 +16,7 @@
   "devDependencies": {
     "@types/node": "^22.9.0",
     "electron": "^33.2.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.6.3"
   }
 }
