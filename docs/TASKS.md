@@ -92,13 +92,15 @@
 - 完成时间：
 
 ### TASK-008：权限声明与安装授权
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-permission
+- 分支：agent-permission/feat-permission
 - 需求描述：实现权限插件（approval policy）：解析 manifest 的 `permissions` 字段；安装/启用时向用户展示权限清单并可拒绝；拒绝后插件不可启用；权限声明的最小集合（`files:read/write`、`network:fetch`、`clipboard:read/write`、`shell:exec`）。
 - 验收标准：安装流程展示权限清单；用户拒绝后插件无法启用；权限在 manifest 缺省时按空权限处理。
 - 依赖：TASK-003
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `6df5536`），远端分支已删除。功能复跑验收：approval-policy 单测 32/32 通过（permissions 归一化 12 + ApprovalPolicy 引擎 14 + 经内核 LifecycleManager 挂载的集成测试 6），kernel 回归 35/35 通过；typecheck/lint exit 0。授权语义核对通过：denied 记录持久化且不重复弹窗、revoke() 后可重新申请（无功能死锁）、manifest 缺省 permissions 按空权限自动通过、未知权限 fail-safe 不授予并记日志告警、FailSafePrompter 无授权 UI 时默认拒绝无静默放行路径、approval:requested/granted/denied 事件契约齐全。
+- **边界标注**：权限目录 v1 为粗粒度字符串 ID（后续版本可细化为 `network:fetch:https://...`）；MemoryApprovalStore 为内存最小实现，跨重启持久化待 profile 引擎（TASK-004 方向）集成时注入持久化 ApprovalStore；授权 UI 由壳（TASK-006）注入 ApprovalPrompter，壳接入前 FailSafePrompter 对带权限插件默认拒绝。
 
 ### TASK-009：示例插件 ×3（验证规范）
 - 状态：待派发
@@ -143,8 +145,8 @@
 - 说明：TASK-005 已完成，index.ts 头部注释仍将其列为「后续任务」。TASK-004 合并时已顺带修正（现按序登记 TASK-002~005 均已交付），销项于 2026-10-13 由需求方确认。
 
 ### P-002：pnpm esbuild 构建审批落库
-- 状态：待处理
-- 说明：vitest 传递依赖 esbuild 的安装脚本审批未写入仓库（仅本地临时 esbuild:false，未提交）。新环境 pnpm install 会再次弹出交互提示，CI（非交互）会卡住。由下一个执行 pnpm install 的任务在 pnpm-workspace.yaml 的 onlyBuiltDependencies（或等效字段）中显式声明并提交。推荐声明允许（esbuild 需 postinstall 下载平台二进制）；若实测不跑脚本可跑通，可声明禁止，但提交信息须说明理由与验证方式。
+- 状态：已解决（销项）
+- 说明：TASK-008（agent-permission）合并时已在 pnpm-workspace.yaml 的 allowBuilds 中显式声明 `esbuild: true`（与已有 `electron: true` 同字段）并随分支落库；合并前实测 `pnpm install` 非交互通过（exit 0，lockfile 通过 supply-chain 校验，无 esbuild 构建审批弹窗、无 ERR_PNPM_IGNORED_BUILDS）。销项于 2026-10-13。
 
 ---
 
