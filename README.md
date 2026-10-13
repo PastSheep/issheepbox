@@ -18,9 +18,11 @@ docs/                    工作流与规范文档（唯一权威，详见下节�
 | 文档 | 内容 |
 |---|---|
 | `AGENTS.md` | 所有 agent 的硬性规则，开工前必须读完 |
+| `docs/requirements.md` | 产品需求与架构设计（头脑风暴结论的唯一权威） |
 | `docs/workflow.md` | 完整工作流：角色、任务生命周期、新增 agent 流程 |
 | `docs/conventions.md` | 分支命名、提交信息、工作区约定 |
 | `docs/merge-policy.md` | 合并与审查流程、冲突解决原则、main 保护规则 |
+| `docs/TASKS.md` | 任务清单与状态 |
 
 ## 重要原则
 
