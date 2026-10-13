@@ -97,8 +97,8 @@ export interface ServiceRegistry {
  *  - ctx.ui（TASK-006）
  */
 export interface PluginContext {
-  /** 当前内核暴露的 API 主版本。 */
-  readonly apiVersion: '1.0';
+  /** 当前内核暴露的 API 版本（SemVer）。 */
+  readonly apiVersion: string;
   /** 本插件的 manifest 快照（由加载器注入）。 */
   readonly manifest: PluginManifest;
   /** 日志。 */

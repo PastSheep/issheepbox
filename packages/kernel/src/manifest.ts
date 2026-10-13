@@ -11,7 +11,7 @@
  */
 import type { PluginManifest } from './types';
 
-const ID_RE = /^[a-z][a-z0-9]*(\.[a-z0-9]+)+$/;
+const ID_RE = /^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+([-+].+)?$/;
 
 export interface ParseManifestResult {
