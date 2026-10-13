@@ -42,13 +42,15 @@
 - **待办**：① 插件工厂调用（mount/生命周期）→ TASK-003；② apiVersion SemVer range 比对（manifest 校验 #5）→ TASK-005；③ 文档清理：docs/plugin-spec-v1.md 文末「下一步」清单首条（「TASK-002 完成后，补充第 4.2 节 ctx API 完整方法签名与类型定义链接」）为过时 TODO，待后续清理。
 
 ### TASK-003：内核·生命周期 + services/events + 可逆 effects
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-kernel
+- 分支：agent-kernel/feat-kernel-lifecycle
 - 需求描述：实现插件生命周期（mount/init/start/stop/unmount）与可逆 effects：插件注册的服务、事件监听在其卸载时自动回滚清理；services 注册表与类型化事件总线；插件间通过 services/events 协作，不直接引用。
 - 验收标准：卸载插件后无残留注册（服务/监听全部清理）；服务可被其他插件消费；事件可跨插件收发；提供生命周期钩子文档。
 - 依赖：TASK-002
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `fa82b0a`），远端分支已删除。
+- **边界标注**：本任务不实现 TASK-004 profile 配置引擎 / TASK-005 apiVersion 比对 / TASK-002 依赖拓扑排序。
 
 ### TASK-004：内核·profile 配置引擎
 - 状态：待派发
@@ -60,13 +62,14 @@
 - 完成时间：
 
 ### TASK-005：内核·兼容性校验与失败隔离
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-compat
+- 分支：agent-compat/feat-kernel-compat
 - 需求描述：实现兼容性校验：插件 manifest 的 `apiVersion` 与当前 ctx API 版本比对（SemVer 范围），不匹配拒绝加载并提示用户；单插件加载失败不影响其他插件（失败隔离）；校验策略文档化。
 - 验收标准：`apiVersion` 不匹配的插件被拒绝且其他插件正常；拒绝原因可读；提供校验规则的单元测试。
 - 依赖：TASK-002
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `2353960`），远端分支已删除。
 
 ### TASK-006：壳插件·最小默认壳
 - 状态：待派发
