@@ -85,13 +85,15 @@
 - **边界标注**（任务方声明，合并者登记）：① 未在真实 Electron 窗口人工验证 UI 渲染（无图形环境，IPC 经 Node 侧事件流验证）；② pluginsDir 开发态硬编码指向 monorepo packages/，生产态改 userData/plugins 留打包任务（TASK-011）；③ shell:ui.registerPanel 仅记录面板列表，未实现实际挂载区域。
 
 ### TASK-007：市场客户端（GitHub registry）
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-market
+- 分支：agent-market/feat-market-client
 - 需求描述：实现市场客户端：拉取 registry（`plugins.json`，registry URL 可配置）、展示插件列表（名称/描述/作者/版本）、从 GitHub Releases 下载 zip、解压到本地插件目录、按 manifest 注册；支持安装/卸载/更新；GitHub 不可用时走本地缓存与手动导入。
 - 验收标准：能安装/卸载/更新一个真实示例插件；版本对比正确；网络失败有缓存兜底；registry URL 可配置。
 - 依赖：TASK-004
-- 完成时间：
+- 完成时间：2026-10-13
+- **合并记录（merger）**：2026-10-13 审查通过并合并（merge `5ade5b9`），远端分支已删除。功能复跑验收：verify:fixture 46/46 断言通过（fixture 12 条：4 合法 + 8 非法；覆盖顶层/单条/重复 id 分层容错、list 九类过滤、compareVersions SemVer 语义、占位接口抛错）；typecheck/lint exit 0。交付范围：registry 类型族 + 容错解析 parseRegistryIndex（永不抛异常）+ compareVersions/parseSemver 纯函数 + MarketClient（fetchIndex/list/getById/invalidEntries/topLevelErrors）。
+- **边界标注**（任务方声明，合并者登记）：① 未改 pnpm-workspace.yaml（P-002 已由 TASK-008 落库 esbuild:true，本任务 pull 到 58003b4 后 pnpm install/typecheck 实测可用，P-002 保持销项）；② id 校验接受连字符，与 schema pattern 冲突 → 登记 P-003 后续修订；③ download/install/uninstall/update 为 Promise<never> 占位，依赖 registry 仓库落地与 TASK-011 打包；④ 未跑 CI（合并后由流水线执行）；⑤ DEFAULT_REGISTRY_URL 为占位常量（REPLACE_ORG/REPLACE_REPO），待需求方提供 GitHub 组织/仓库名（与 TASK-010 遗留的 registry 初始化待办相关）。
 
 ### TASK-008：权限声明与安装授权
 - 状态：已完成
@@ -149,6 +151,10 @@
 ### P-002：pnpm esbuild 构建审批落库
 - 状态：已解决（销项）
 - 说明：TASK-008（agent-permission）合并时已在 pnpm-workspace.yaml 的 allowBuilds 中显式声明 `esbuild: true`（与已有 `electron: true` 同字段）并随分支落库；合并前实测 `pnpm install` 非交互通过（exit 0，lockfile 通过 supply-chain 校验，无 esbuild 构建审批弹窗、无 ERR_PNPM_IGNORED_BUILDS）。销项于 2026-10-13。
+
+### P-003：修订 plugin-registry-schema.md 的 id pattern 对齐连字符
+- 状态：待处理
+- 说明：docs/plugin-registry-schema.md 第 5 节 id pattern（`^[a-z][a-z0-9]*(\.[a-z0-9]+)+$`）不含连字符，与权威规范冲突——docs/plugin-spec-v1.md 第 3.2 节 id 示例（com.example.my-tool）及 kernel manifest 校验（packages/kernel/src/manifest.ts）均接受连字符。TASK-007（agent-market）客户端已按规范权威放宽（parse.ts ID_RE 含 `-`，并有注释说明）。后续需修订 schema 的 id pattern 为 `^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$` 对齐，并回归 registry 机器校验流程。
 
 ---
 
