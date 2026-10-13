@@ -1,0 +1,25 @@
+{
+  "name": "is-sheep-box",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Is Sheep Box — 插件化桌面工具箱（monorepo 根）",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "pnpm --filter @issheepbox/desktop run dev",
+    "typecheck": "tsc --build --pretty",
+    "lint": "eslint .",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/node": "^22.9.0",
+    "eslint": "^9.13.0",
+    "globals": "^15.12.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.12.0"
+  }
+}
