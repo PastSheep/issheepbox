@@ -1,13 +1,14 @@
 {
   "name": "@issheepbox/market-client",
   "version": "0.0.0",
-  "description": "插件市场客户端（GitHub registry 拉取/安装/卸载/更新，TASK-007 实现）",
+  "description": "插件市场客户端：拉取/解析 registry 索引（plugins.json）、查询与过滤插件列表（TASK-007）",
   "license": "UNLICENSED",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc --build",
-    "clean": "tsc --build --clean"
+    "clean": "tsc --build --clean",
+    "verify:fixture": "node scripts/verify-fixture.mjs"
   },
   "dependencies": {
     "@issheepbox/kernel": "workspace:*"
