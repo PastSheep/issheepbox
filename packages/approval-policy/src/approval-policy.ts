@@ -29,6 +29,18 @@ import {
   normalizePermissions,
 } from './permissions';
 
+/**
+ * 启动恢复路径来源（批次契约 C2）：kernel ProfileEngine 的 boot / restore /
+ * switchTo 在挂载带权限插件前调用 requestApprovalForManifest(manifest, source)。
+ * 这些来源下不弹窗（启动期无交互上下文），仅查存储做门禁。
+ */
+export const BOOT_PATH_SOURCES = new Set(['boot', 'restore', 'switchTo']);
+
+/** source 是否属于启动恢复路径（boot/restore/switchTo）。 */
+export function isBootPathSource(source: string | undefined): boolean {
+  return source !== undefined && BOOT_PATH_SOURCES.has(source);
+}
+
 /** ApprovalPolicy 构造选项。 */
 export interface ApprovalPolicyOptions {
   /** 授权记录存储（最小实现：MemoryApprovalStore；后续可注入 profile 引擎实现）。 */
@@ -94,6 +106,34 @@ export class ApprovalPolicy {
         pluginId,
         permissions: norm.requiringApproval,
         reason: existing.reason ?? '用户此前已拒绝授权（可撤销后重新申请）',
+      };
+    }
+
+    // 启动恢复路径（boot/restore/switchTo，C2 契约）：仅查存储、不弹窗、不写新记录。
+    // 走到这里说明既无「granted 覆盖」也无「denied 记录」——
+    // 即无记录，或 granted 记录未覆盖全部需授权权限 → fail-safe 拒绝。
+    // 关键：这里绝不 store.set()，否则会把用户尚未决策的插件永久锁死在 denied。
+    if (isBootPathSource(source)) {
+      // 空权限插件直通（与显式 enable 语义一致：无权限插件启动不拦）。
+      if (norm.requiringApproval.length === 0) {
+        return {
+          status: 'granted',
+          pluginId,
+          permissions: norm.known,
+          auto: true,
+        };
+      }
+      this.logger?.info(
+        `[approval-policy] 插件 ${pluginId}（${pluginName}）在启动路径（${source}）` +
+          `下无有效授权记录，不弹窗，按 fail-safe 拒绝挂载`,
+      );
+      return {
+        status: 'denied',
+        pluginId,
+        permissions: norm.requiringApproval,
+        reason:
+          `启动路径（${source}）未授权：启动时不弹窗，按 fail-safe 拒绝挂载；` +
+          `请在安装/启用流程显式完成授权后，授权记录即被启动路径自动复用`,
       };
     }
 
