@@ -46,6 +46,19 @@ export interface ApprovalGateway {
   ): Promise<ApprovalDecisionLike>;
 }
 
+/**
+ * 运行时权限判定最小接口（P-009，宿主 files 能力门禁）。
+ *
+ * 形状与 approval-policy 服务的 `checkPermission(pluginId, permission): boolean`
+ * 对齐。ctx.files.readFile / writeFile 在每次调用时经内核 services 注册表按名
+ * 查询此服务做运行时门禁——内核不直接 import @issheepbox/approval-policy 包
+ * （结构类型依赖，同 ApprovalGateway 的 P-006 先例）。
+ */
+export interface RuntimePermissionChecker {
+  /** 插件是否被授予某权限；无记录 / denied / 未授权均为 false（fail-safe）。 */
+  checkPermission(pluginId: string, permission: string): boolean;
+}
+
 /** 一个 profile：用户的「专有工具箱」命名组合。 */
 export interface Profile {
   /** profile 名称（唯一）。 */

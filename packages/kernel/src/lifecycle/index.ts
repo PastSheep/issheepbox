@@ -19,11 +19,41 @@ import type {
   PluginManifest,
 } from '../types';
 import type { LoadedPlugin } from '../loader';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { EventBusImpl } from '../events';
 import { ServiceRegistryImpl } from '../services';
 import { EffectScope } from '../effect-scope';
 import { createLogger } from '../logger';
 import { CURRENT_API_VERSION } from '../compat';
+import { APPROVAL_SERVICE_NAME, type RuntimePermissionChecker } from '../profile/types';
+
+/**
+ * P-009：宿主 files 能力运行时授权门禁（fail-safe）。
+ *
+ * 每次 ctx.files 调用都按「本插件 manifest.id」经 services 注册表查询
+ * 'approval-policy' 服务的 checkPermission(pluginId, permission)：
+ *  - 服务未挂载 → 抛错拒绝（无静默放行，与 P-006 enable 门禁语义一致）；
+ *  - checkPermission 返回 false（未授权 / denied / 无记录）→ 抛错拒绝。
+ *
+ * ctx 作用域 API 在 createScopedCtx 内闭包捕获 manifest.id，调用方无法伪造身份。
+ */
+function assertFilePermission(
+  registry: ServiceRegistryImpl,
+  pluginId: string,
+  permission: string,
+): void {
+  if (!registry.has(APPROVAL_SERVICE_NAME)) {
+    throw new Error(
+      `权限门禁不可用：approval-policy 服务未挂载，按 fail-safe 拒绝插件 ${pluginId} 的 "${permission}" 请求`,
+    );
+  }
+  const checker = registry.get<RuntimePermissionChecker>(APPROVAL_SERVICE_NAME);
+  if (!checker.checkPermission(pluginId, permission)) {
+    throw new Error(
+      `权限不足：插件 ${pluginId} 未被授予 "${permission}"（运行时门禁拒绝）`,
+    );
+  }
+}
 
 /** mount 单个插件的结果。 */
 export interface MountOutcome {
@@ -170,6 +200,18 @@ export class LifecycleManager {
           // 与 events/services 自动登记的 cleanup 同 scope；
           // scope 已 dispose 时 EffectScope.add 自身幂等忽略（如 mount 失败回滚后调用）。
           scope.add(fn);
+        },
+      },
+      files: {
+        // P-009：宿主文件能力。闭包捕获 manifest.id → 每次调用自动按本插件身份过门禁；
+        // 内部用 node:fs（宿主能力），插件侧仍被规范 §9.1 禁止直接使用 fs/path。
+        readFile(path: string): string {
+          assertFilePermission(registry, manifest.id, 'files:read');
+          return readFileSync(path, 'utf8');
+        },
+        writeFile(path: string, content: string): void {
+          assertFilePermission(registry, manifest.id, 'files:write');
+          writeFileSync(path, content, 'utf8');
         },
       },
     };

@@ -126,5 +126,6 @@ export type {
   BootResult,
   ApprovalGateway,
   ApprovalDecisionLike,
+  RuntimePermissionChecker,
 } from './profile/types';
 export { PermissivePermissionStore } from './profile/types';
