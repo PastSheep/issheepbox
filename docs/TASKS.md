@@ -178,8 +178,10 @@
 - **合并记录（merger）**：2026-10-14 审查通过并合并（merge `ef0b955`），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 36/36、approval-policy 32/32 测试通过；verify-examples.cjs 47 断言 × 5 场景通过。
 
 ### P-004：内置插件 version 钉死 0.0.0，应用升级后不刷新
-- 状态：待处理
+- 状态：已解决（销项）
 - 说明：TASK-011 的 apps/desktop/src/main.ts 中 copyDirIfNewer 以「userData/plugins 与 resources/builtin-plugins 的 plugin.json version 一致则跳过覆盖」为幂等条件；但 packages/shell-default 与 packages/approval-policy 的 version 均钉死 0.0.0，后续应用升级重打安装包后两侧版本恒等，已展开到 userData 的内置插件不会被新版安装包刷新。MVP 首启无影响（首次展开逻辑正确），升级路径上的内置插件更新失效。修复方向：升级时按应用版本号记录展开标记、改为「resources 侧 buildId/版本戳更新即覆盖」，或在打包流水线中给内置插件自增版本。不随 TASK-011 修复（避免扩大范围），由后续适用任务顺带处理。
+- **解决说明**（agent-fix/p004-builtin-version，提交 9c6facd/adec4db/49e89e3）：前提已过时——两内置插件 plugin.json 现为 0.1.0/1.0.0（package.json 仍 0.0.0），真实形态为「plugin.json version 手动 bump 滞后于代码变更时两侧版本恒等→应用升级后 userData 内置插件不刷新」。修复：幂等键由「两侧 plugin.json version 比较」改为「resources 侧目录内容 sha256」（apps/desktop/src/builtinPlugins.ts，resolveBuiltinAction 纯函数），记入 userData/plugins/.builtin-meta.json——首启全量拷贝保留；同包重复启动 hash 不变跳过；应用升级后包内容 hash 变化即重拷；legacy 无 marker 安装自举补写。策略不依赖任何人 bump 版本号（应用版本 0.0.0→0.1.0 已对齐 version-policy 但仅作观测不入决策）。验证：新增 apps/desktop/scripts/verify-builtin-refresh.cjs 14 项断言（含原故障复现路径）全过；全量门槛 install/typecheck/lint/kernel 35/approval 32/verify 47×5/desktop build 全绿。
+- **合并记录（merger）**：2026-10-14 审查通过并合并（merge 6e65b26d100e3dafccc8375656fd86c93fb67874），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 36/36、approval-policy 32/32 测试通过；verify-examples.cjs 47 断言 × 5 场景通过；desktop build exit 0；verify-builtin-refresh.cjs 14 断言通过。
 
 ### P-005：内核·依赖解析（requires 校验 / 拓扑排序）未实现
 - 状态：待处理
