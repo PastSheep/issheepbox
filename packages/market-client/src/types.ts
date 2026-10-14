@@ -118,17 +118,19 @@ export interface RegistryQuery {
 
 /** MarketClient 构造选项。 */
 export interface MarketClientOptions {
-  /**
-   * registry 索引 URL。
-   *
-   * ⚠️ 默认值见 index.ts 的 DEFAULT_REGISTRY_URL（占位常量）；
-   * GitHub 组织/仓库名待需求方提供后替换，并在此传入真实地址。
-   */
+  /** registry 索引 URL（默认 DEFAULT_REGISTRY_URL，见 index.ts）。 */
   registryUrl?: string;
   /** 自定义 fetch 实现（默认全局 fetch；测试可注入）。 */
   fetchImpl?: typeof fetch;
   /** 拉取超时（毫秒），默认 15000。 */
   timeoutMs?: number;
+  /**
+   * 插件安装目录（pluginsDir，TASK-012）。
+   *
+   * install / uninstall / update / listInstalled / installedVersion 依赖此目录；
+   * 未传入时调用这些方法会抛 MarketInstallError(code=PLUGINS_DIR_REQUIRED)。
+   */
+  pluginsDir?: string;
 }
 
 /** 网络层错误（拉取失败 / HTTP 非 2xx）。解析层错误不抛异常。 */
@@ -141,4 +143,68 @@ export class RegistryFetchError extends Error {
     this.name = 'RegistryFetchError';
     this.status = status;
   }
+}
+
+/**
+ * 安装 / 卸载 / 更新的类型化错误码（TASK-012）。
+ *
+ * 供 UI 按 code 展示友好文案，不必依赖错误消息原文匹配。
+ */
+export type MarketInstallErrorCode =
+  | /** 下载或索引拉取网络失败（含超时 / abort）。 */ 'NETWORK'
+  | /** 下载返回非 2xx 状态码。 */ 'HTTP_STATUS'
+  | /** zip 损坏 / 空包 / 顶层结构非法 / 含路径穿越条目。 */ 'INVALID_ZIP'
+  /** `<id>/plugin.json` 缺失/不可解析/缺必填字段/entry 文件不存在。 */
+  | 'MANIFEST_INVALID'
+  /** zip 顶层目录名 ≠ 插件 id，或 manifest.id ≠ 请求的插件 id。 */
+  | 'ID_MISMATCH'
+  /** pluginsDir 已存在同名合法插件。 */
+  | 'ALREADY_INSTALLED'
+  /** 未安装即调用 uninstall / update。 */
+  | 'NOT_INSTALLED'
+  /** 解压或磁盘写入失败（临时目录已清理，不破坏现装版本）。 */
+  | 'EXTRACT_FAILED'
+  /** registry 索引中没有该插件 id。 */
+  | 'NOT_IN_REGISTRY'
+  /** 插件 id 不合法（与内核 manifest ID_RE 一致的正则）。 */
+  | 'INVALID_PLUGIN_ID'
+  /** 构造时未传 pluginsDir 却调用了安装类方法。 */
+  | 'PLUGINS_DIR_REQUIRED';
+
+/** 安装 / 卸载 / 更新的类型化错误（带 code，供 UI 分类展示）。 */
+export class MarketInstallError extends Error {
+  /** 错误码（见 MarketInstallErrorCode）。 */
+  readonly code: MarketInstallErrorCode;
+  /** HTTP 状态码（仅 HTTP_STATUS 时有值）。 */
+  readonly status?: number;
+
+  constructor(code: MarketInstallErrorCode, message: string, status?: number) {
+    super(message);
+    this.name = 'MarketInstallError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** install / update 成功返回值。 */
+export interface InstallResult {
+  /** 插件 id。 */
+  pluginId: string;
+  /** 落盘插件 plugin.json 的 version。 */
+  version: string;
+  /** 插件包目录绝对路径（pluginsDir/<pluginId>）。 */
+  dir: string;
+}
+
+/** update 成功返回值（updated=false 表示已是最新、未下载）。 */
+export interface UpdateResult extends InstallResult {
+  /** 是否真的替换了磁盘上的版本。 */
+  updated: boolean;
+}
+
+/** 已安装插件摘要（listInstalled 返回；供市场 UI 展示已装状态）。 */
+export interface InstalledPluginInfo {
+  pluginId: string;
+  version: string;
+  dir: string;
 }
