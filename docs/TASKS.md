@@ -325,6 +325,22 @@
 - 仓库：E:\Projects\IsSheepBox\workspaces\registry（origin → https://github.com/PastSheep/issheepbox-registry.git，独立仓库）
 - 解决说明（分支 agent-fix/registry-listing，提交 17af956 / 69fb7ae；registry main 合并提交 af62a13）：plugins.json 登记 4 个第一方插件（org.issheepbox.shell-default / example.note / example.file-stats / example.theme-service），均以 status=pending 占位——downloadUrl 需可 GET 的真实 zip 资产 URL，而插件均未发布过 zip（发布流水线 TASK-011 未跑通），故不伪造 URL，先以 pending 登记元数据，待发布流程产出 zip 后补 releaseUrl/downloadUrl 转 active；schemas/plugins.schema.json 镜像主仓库 docs/plugin-registry-schema.md §5（id 连字符 + status 枚举 + if/then/else 条件必填）；README 记录 pending 语义与流转条件。未上架 approval-policy（第一方基础设施、随应用内置，公开上架会与内置副本版本分裂）与 market-client（无 plugin.json，是客户端库包而非插件）。校验：jsonschema Draft7 0 error + 57 项语义断言 + 反向用例（active 缺 URL 正确报错）。
 
+### P-010：内核类型包发布（@issheepbox/kernel npm）
+- 状态：待处理
+- 说明：第三方插件脱离 monorepo 独立开发的**前置条件**——当前插件依赖内核 ctx API 类型经 `workspace:*` 引用，仅在 monorepo 内有效；独立仓库开发者需可安装的类型包。方向：发布 `@issheepbox/kernel` 类型包（npm 公开或私有 registry），含 ctx API / PluginManifest / services / events 类型与 d.ts；版本与 version-policy 的「内核 ctx API 版本」对齐（CURRENT_API_VERSION）。发布流程与 TASK-020（插件独立发布流水线）可共用发布基建。
+
+### P-011：第三方插件模板仓库 + scaffold 脚手架
+- 状态：待处理
+- 说明：让第三方开发者「一键生成插件骨架」：plugin.json（合规 manifest）+ src（消费 ctx v1 API）+ tsconfig + GitHub Actions workflow（构建 dist → 打 zip → 上传 Release）+ registry 上架脚本（提交 plugins.json 条目）。模板仓库可容纳多插件（共享一个 CI，与「一仓库多插件」模型一致）。零门槛 = 开发者不必理解 monorepo 内部结构。
+
+### P-012：registry 第三方上架流程文档（PR 审核模式）
+- 状态：待处理
+- 说明：官方 registry（PastSheep/issheepbox-registry）接受第三方上架的方式与约束文档化：开发者 fork → 提交 plugins.json 条目（status=pending）→ PR → 维护者审核（schema 校验 + zip 资产可下载核验）→ 合并转 active；发布方自持 downloadUrl（zip 在其自己的 Release，官方不代托管）；README/docs 补充上架流程、schema 语义（pending/active）、校验命令（validate_index.py）。配套：registry 仓库独立于主仓库，上架不触发应用发布。
+
+### P-013：自定义 registry 源配置 + 自建 registry 文档 + zip 完整性校验
+- 状态：待处理
+- 说明：用户自由搭建工具箱的配置层落地：① 应用配置 `userData/config.json` 的 `registryUrl`（默认官方地址，未配置=官方），market-client 构造时读取（构造参数已支持，改默认值来源），配置变更刷新索引；② desktop 市场 UI 提供「数据源」设置入口（显示当前 URL、可修改、重置默认）；③ 自建 registry 文档：协议为开放静态 JSON（plugins.json + schema 镜像即可自建，无需审批）——docs/registry-guide.md 说明自建/镜像/内网托管/离线场景；④ schema 增加 `sha256` 字段（zip 资产完整性校验，防下载篡改——自定义源场景下尤其必要），market-client install 时校验。
+
 ---
 
 ## 状态说明
