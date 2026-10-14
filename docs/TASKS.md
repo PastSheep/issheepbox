@@ -198,9 +198,11 @@
 - **合并记录（merger）**：2026-10-14 审查通过并合并（merge a28a683b5a6d901880d535ef23c95b8fc359988a），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 58/58、approval-policy 32/32 测试通过；verify-examples.cjs 46 断言 × 5 场景通过。
 
 ### P-007：shell:ui 面板注册无回滚（宿主侧状态残留）
-- 状态：待处理
+- 状态：已解决（销项）
 - 来源：TASK-009 规范反馈 F-006（agent-examples）
 - 说明：`packages/shell-default/src/index.ts` 的 `registerPanel` 仅向内部 `panels` 数组 push，无 unregister、不参与内核 EffectScope；插件卸载后其面板记录不自动回滚，与规范 §5.2「卸载无残留」契约不符（TASK-009 验证脚本已按当前行为断言并标注）。建议：registerPanel 返回 unregister 函数，或由内核/壳对面板注册做 effect 包装；同时可考虑把面板声明来源（manifest ui.panels）纳入壳记录以支持自动回滚。
+- **解决说明**（agent-fix/p007-panel-effects，提交 4ba7c11）：① kernel 新增公开 ctx.effects.add(fn)（EffectsRegistry 类型 + createScopedCtx 接线，与 events/services 自动登记同 effect scope，卸载逆序自动执行，EffectScope.add 自身幂等故 mount 失败回滚安全）；② shell-default registerPanel 改为返回 unregister（按面板对象引用精确移除并发 panel-unregistered refresh）；③ note 注册面板时 ctx.effects.add(unregister) 挂进自身 scope，卸载自动回滚；④ verify-examples.cjs 场景 A 断言翻转为「面板已随 scope 回滚」，头部旧编号 P-006 更正为 P-007；⑤ plugin-spec-v1.md §4.2/§5.2/§11.3/F-006 行同步新回滚契约。内核改动最小（复用既有 EffectScope 原语），未做 service 调用归因包装或 manifest 声明回滚。验证：typecheck/lint exit 0；kernel 60/60（58+2）、approval-policy 32/32；verify-examples.cjs 46 断言 × 5 场景通过。
+- **合并记录（merger）**：2026-10-14 审查通过并合并（merge c8fc42e7bb536e182b6c1cf9e21d31b23483190b），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 60/60、approval-policy 32/32 测试通过；verify-examples.cjs 46 断言 × 5 场景通过。
 
 ### P-008：ctx.apiVersion 注入值非完整 SemVer
 - 状态：已解决（销项）
