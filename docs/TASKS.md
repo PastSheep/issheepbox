@@ -108,19 +108,22 @@
 - **边界标注**：权限目录 v1 为粗粒度字符串 ID（后续版本可细化为 `network:fetch:https://...`）；MemoryApprovalStore 为内存最小实现，跨重启持久化待 profile 引擎（TASK-004 方向）集成时注入持久化 ApprovalStore；授权 UI 由壳（TASK-006）注入 ApprovalPrompter，壳接入前 FailSafePrompter 对带权限插件默认拒绝。
 
 ### TASK-009：示例插件 ×3（验证规范）
-- 状态：待派发
-- 负责 agent：待定
-- 分支：待定
+- 状态：已完成
+- 负责 agent：agent-examples
+- 分支：agent-examples/feat-plugins-examples
 - 需求描述：开发三个示例插件验证规范 v1：①纯 UI 面板插件（如便签）；②带权限插件（如文件文本统计，需 `files:read`）；③带服务插件（提供服务被其他插件消费，如主题服务）。三个插件均含完整 manifest 与可运行代码。
 - 验收标准：三个插件均可被内核加载、勾选启用、正常使用、卸载无残留；示范三种典型形态；代码可作第三方插件模板。
 - 依赖：TASK-006、TASK-008
-- 完成时间：
-- **分支登记（merger）**：远端已有 `origin/agent-examples/feat-plugins-examples`（TASK-011 合并时 fetch 发现），按策略保留不合并、不删除，待需求方确认 TASK-009 执行状态后对接。
-- **执行汇报（agent-examples，待合并）**：
-  - 分支：`agent-examples/feat-plugins-examples`
-  - 交付：`packages/plugins/note`（纯 UI 面板，无权限）、`packages/plugins/file-stats`（files:read 权限）、`packages/plugins/theme-service`（theme 服务 + theme:changed 事件）；验证脚本 `packages/plugins/verify-examples.cjs`；规范反馈修订 docs/plugin-spec-v1.md（附录 F-001~F-010）与 P-005~P-009 登记。
-  - 验证：`pnpm typecheck` / `pnpm lint` exit 0；验证脚本 47 项断言 × 5 场景全部通过（加载 / enable / 使用 / unmount 无残留 / 权限拒绝路径 / 授权路径 / FailSafePrompter 默认拒绝 / 运行时 fail-safe）。
-  - 已知 seam 缺口：shell:ui 面板记录不随插件卸载回滚（P-007，脚本按当前行为断言并标注）。
+- 完成时间：2026-10-14
+- **交付（agent-examples）**：
+  - `packages/plugins/note`（纯 UI 面板，无权限）、`packages/plugins/file-stats`（files:read 权限）、`packages/plugins/theme-service`（theme 服务 + theme:changed 事件）；验证脚本 `packages/plugins/verify-examples.cjs`；规范反馈修订 docs/plugin-spec-v1.md（附录 F-001~F-010）。
+- **合并记录（merger）**：2026-10-14 审查通过并合并（merge `dfbcde1`，分支 tip `443c3ac`，基于 4aa191d 落后 main 3 提交，无并行开发分支故直接并入），远端分支已删除。
+  - 审查结论：5 提交信息符合 conventions（3×feat(plugins) / 1×test(plugins) / 1×docs，正文写明改了什么/为什么）；diff 范围 20 文件 +1090 行与任务一致；无密钥/本机路径（仅注释中出现"token 数"一词）；无 dist/node_modules/二进制产物入库。
+  - 冲突处理：docs/TASKS.md P 编号撞车——main 的 P-004（TASK-011 内置插件 version 钉死）保留原样，分支登记的 P-004~P-008 整体顺延为 P-005~P-009（顺序不变、双方内容逐字保留），执行汇报块内引用同步顺延（原 P-006 shell:ui 面板缺口 → 现 P-007）；pnpm-lock.yaml 自动合并后经 `pnpm install` 验证（exit 0，lockfile 同时含 3 个新 importer 与 electron-builder/electron-winstaller 条目，allowBuilds 已有 TASK-011 修复的 electron-winstaller: true）。
+  - 合并后复跑验证：`pnpm install` exit 0；`pnpm run typecheck` exit 0；`pnpm run lint` exit 0；`node packages/plugins/verify-examples.cjs` exit 0——47 项断言 × 5 场景全部通过（A 内核发现/enable/使用/unmount 无残留、B 权限拒绝路径、C 授权路径、D FailSafePrompter 默认拒绝、E 未授权强制挂载 fail-safe）。
+  - F-001~F-010 审查结论：逐条核对与 kernel / shell-default / approval-policy 实际实现一致——F-001（note 仅用 v1 已交付 ctx.manifest/apiVersion/logger/events/services，无 ctx.commands/panels/storage）✓；F-002（shell:ui 与 approval-policy 服务真实存在，验证脚本对真实服务跑通）✓；F-003（§3.2 id 正则已对齐连字符，与 kernel manifest.ts ID_RE 一致）✓；F-004（dependency/ 确为占位骨架，resolveOrder 抛「未实现」）✓；F-005（start/stop 标注为设计目标，注释属实）✓；F-006（shell-default registerPanel 仅 push 无 unregister、无回滚）✓；F-007（profile/index.ts 确为 `void opts.permissions` 占位）✓；F-008（内核/壳无 files 宿主服务，file-stats 走文本传入沙箱模式）✓；F-010（lifecycle 注入 `apiVersion: '1.0'` 而 CURRENT_API_VERSION='1.0.0'）✓。未发现反馈与实现不符或文档内部矛盾。
+  - P-003 去留结论：保留待处理——分支仅修订 docs/plugin-spec-v1.md，docs/plugin-registry-schema.md 的 id pattern（不含连字符）未动，registry 机器校验流程仍待对齐回归。
+  - 备注：verify-examples.cjs 文件头含 `/* eslint-disable @typescript-eslint/no-require-imports */` 及理由说明（该规则针对插件运行时沙箱，测试台需 require 构建产物），判定合理；脚本注释中「P-006」字样为顺延前旧编号引用，按边界不改 packages/** 代码，留待后续任务顺带修订。
 
 ### TASK-010：插件规范 v1 文档 + registry 仓库初始化
 - 状态：已完成
