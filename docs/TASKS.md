@@ -191,9 +191,11 @@
 - **合并记录（merger）**：2026-10-14 审查通过并合并（merge 77bd2eafd876626943b472cfd96a08f9a7c6fdb8），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 52/52、approval-policy 32/32 测试通过；verify-examples.cjs 47 断言 × 5 场景通过。
 
 ### P-006：ProfileEngine.enable 未接入权限校验
-- 状态：待处理
+- 状态：已解决（销项）
 - 来源：TASK-009 规范反馈 F-007（agent-examples）
 - 说明：`packages/kernel/src/profile/index.ts` 构造函数接收 `opts.permissions` 但仅 `void opts.permissions`（TASK-008 边界标注「权限校验留后续集成」）；"拒绝后插件不可启用"目前依赖宿主/调用方先经 `approval-policy.requestApprovalForManifest` 再 enable（TASK-009 验证脚本按此门禁实现）。建议 ProfileEngine.enable 在 mount 前查询授权（granted 才启用），并把授权记录持久化进 profile 或注入持久化 ApprovalStore。
+- **解决说明**（agent-fix/p006-profile-authz，提交 4dba527）：ProfileEngine.enable 在 mount 前经 services 注册表按名查询 'approval-policy' 服务、requestApprovalForManifest 做授权判定——声明非空 permissions 的插件须 granted 才进 enabled 并 mount，denied 不进 enabled/不持久化/不 mount/不快照（在 snapshot 前 return）；无权限插件自动放行。接线走 services 注册表（内核不 import approval-policy 包，结构接口 ApprovalGateway/ApprovalDecisionLike 定义于 profile/types.ts）；approval-policy 服务未挂载时带权限插件 fail-safe 拒绝（与 FailSafePrompter 一致）。boot()/restore()/switchTo() 不重复门禁（enable 为唯一写路径入口；启动期 approval 服务通常未挂载且 ApprovalStore 为内存实现，重复门禁会破坏 shell-default 无权限启动；持久化授权记录留待后续接入持久化 ApprovalStore）。测试：kernel 新增 6 项门禁用例（granted/denied/空权限/缺省 permissions/服务未挂载/未注入 services）；verify-examples.cjs 场景 B/C/D 改直接 profile.enable()，B 的 prompts 计数仍为 1（拒绝记录复用）。验证：typecheck/lint exit 0；kernel 58（52+6）、approval-policy 32 全过；verify-examples 46 断言 × 5 场景 exit 0（较基线 47 少 1：移除 enable() 返回不可见的 decision.status 断言，改以状态断言）。
+- **合并记录（merger）**：2026-10-14 审查通过并合并（merge a28a683b5a6d901880d535ef23c95b8fc359988a），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 58/58、approval-policy 32/32 测试通过；verify-examples.cjs 46 断言 × 5 场景通过。
 
 ### P-007：shell:ui 面板注册无回滚（宿主侧状态残留）
 - 状态：待处理
