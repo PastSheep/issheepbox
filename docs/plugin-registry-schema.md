@@ -58,8 +58,9 @@ plugin-registry/               # registry 仓库（待创建）
 | `icon` | string | ❌ | 图标 URL（可指向仓库 raw 地址） |
 | `homepage` | string | ❌ | 项目主页 URL |
 | `repository` | string | ✅ | 源码仓库 URL（GitHub） |
-| `releaseUrl` | string | ✅ | 当前版本 Release 页面 URL |
-| `downloadUrl` | string | ✅ | zip 包下载直链（GitHub Release assets） |
+| `status` | string | ❌ | 上架状态，缺省视为 active。active=已发布可下载；pending=元数据已登记、zip 资产待发布 |
+| `releaseUrl` | string | 条件 | 当前版本 Release 页面 URL。active 必填；pending 可缺省，留待发布后补齐 |
+| `downloadUrl` | string | 条件 | zip 包下载直链（GitHub Release assets）。active 必填；pending 可缺省，留待发布后补齐 |
 | `permissions` | string[] | ✅ | 该版本声明的权限列表（镜像 manifest） |
 | `requires` | object | ❌ | 依赖列表（镜像 manifest） |
 | `tags` | string[] | ❌ | 分类标签，如 `["productivity", "note"]` |
@@ -138,12 +139,12 @@ plugin-registry/               # registry 仓库（待创建）
       "type": "object",
       "required": [
         "id", "name", "description", "author", "version", "apiVersion",
-        "repository", "releaseUrl", "downloadUrl", "permissions", "publishedAt"
+        "repository", "permissions", "publishedAt"
       ],
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9]*(\\.[a-z0-9]+)+$",
+          "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)+$",
           "description": "反向域名风格全局唯一 ID"
         },
         "name": { "type": "string", "maxLength": 50 },
@@ -158,6 +159,11 @@ plugin-registry/               # registry 仓库（待创建）
         "icon": { "type": "string", "format": "uri" },
         "homepage": { "type": "string", "format": "uri" },
         "repository": { "type": "string", "format": "uri" },
+        "status": {
+          "type": "string",
+          "enum": ["active", "pending"],
+          "description": "上架状态：active=已发布可下载；pending=元数据已登记、zip 资产待发布"
+        },
         "releaseUrl": { "type": "string", "format": "uri" },
         "downloadUrl": { "type": "string", "format": "uri" },
         "permissions": {
@@ -171,6 +177,14 @@ plugin-registry/               # registry 仓库（待创建）
           "items": { "type": "string" }
         },
         "publishedAt": { "type": "string", "format": "date-time" }
+      },
+      "if": {
+        "properties": { "status": { "const": "pending" } },
+        "required": ["status"]
+      },
+      "then": {},
+      "else": {
+        "required": ["releaseUrl", "downloadUrl"]
       },
       "additionalProperties": false
     }
@@ -193,6 +207,7 @@ plugin-registry/               # registry 仓库（待创建）
    - ID 唯一性
    - `downloadUrl` 可访问
 4. 合并后更新 `generatedAt` 字段。
+5. pending → active 流转：开发者发布 zip 资产后，补齐 `releaseUrl`/`downloadUrl` 并将 `status` 置为 `active`，更新 `generatedAt`。
 
 ### 6.2 插件更新版本
 
