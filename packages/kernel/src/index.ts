@@ -9,6 +9,8 @@
  * TASK-003 已交付：LifecycleManager mount/unmount + 可逆 effects。
  * TASK-004 已交付：ProfileEngine（持久化/热重载/快照/壳 fallback）。
  * TASK-005 已交付：apiVersion SemVer 兼容性校验。
+ * P-005 已交付：DependencyResolver requires 校验（缺失/版本/循环）+ 拓扑排序，
+ * 不合规插件在 start() 阶段拒绝并记入 discoveryFailures（失败隔离）。
  */
 import { PluginLoader } from './loader';
 import type { LoadedPlugin } from './loader';
@@ -57,13 +59,21 @@ export class IsSheepBoxKernel {
     });
 
     const discovery = this.loader.loadAll(pluginsDir);
-    this.profile.setAvailablePlugins(discovery.loaded);
+
+    // P-005：依赖解析（§10 校验 #7/#8）。
+    //  requires 校验 / 循环依赖失败的插件进 discoveryFailures 并被排除出可用集合，
+    //  不影响其余插件；通过者按拓扑顺序（依赖在前）交给 profile。
+    const resolved = this.dependency.resolveOrder(discovery.loaded);
+    this.profile.setAvailablePlugins(resolved.ordered);
 
     const boot = await this.profile.boot();
     return {
       boot,
-      discovered: discovery.loaded,
-      discoveryFailures: discovery.failures,
+      discovered: resolved.ordered,
+      discoveryFailures: [
+        ...discovery.failures,
+        ...resolved.failures.map((f) => ({ dir: f.dir, errors: f.errors })),
+      ],
     };
   }
 
@@ -87,6 +97,12 @@ export type {
   MountOutcome,
   MountAllResult,
 } from './lifecycle';
+export { DependencyResolver } from './dependency';
+export type {
+  ResolutionResult,
+  DependencyFailure,
+  ResolveOptions,
+} from './dependency';
 export { EffectScope } from './effect-scope';
 export { parseManifest } from './manifest';
 export { createLogger } from './logger';

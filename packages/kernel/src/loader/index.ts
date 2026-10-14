@@ -10,7 +10,8 @@
  *
  * 不做的事：
  *  - 不调用插件工厂（mount/生命周期由 TASK-003 负责）
- *  - 不做依赖拓扑排序（见 dependency/ 占位）
+ *  - 不做依赖拓扑排序与 requires 校验（由 Kernel.start 经 DependencyResolver
+ *    在全量 manifest 就绪后统一处理，见 dependency/）
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
