@@ -15,7 +15,8 @@
     "pack": "tsc --build && electron-builder --win --config electron-builder.yml --publish never"
   },
   "dependencies": {
-    "@issheepbox/kernel": "workspace:*"
+    "@issheepbox/kernel": "workspace:*",
+    "@issheepbox/market-client": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

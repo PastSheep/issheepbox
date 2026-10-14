@@ -32,6 +32,9 @@ importers:
       '@issheepbox/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@issheepbox/market-client':
+        specifier: workspace:*
+        version: link:../../packages/market-client
     devDependencies:
       '@types/node':
         specifier: ^22.9.0
