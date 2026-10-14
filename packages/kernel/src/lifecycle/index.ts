@@ -23,6 +23,7 @@ import { EventBusImpl } from '../events';
 import { ServiceRegistryImpl } from '../services';
 import { EffectScope } from '../effect-scope';
 import { createLogger } from '../logger';
+import { CURRENT_API_VERSION } from '../compat';
 
 /** mount 单个插件的结果。 */
 export interface MountOutcome {
@@ -135,7 +136,7 @@ export class LifecycleManager {
     const registry = this.registry;
 
     return {
-      apiVersion: '1.0',
+      apiVersion: CURRENT_API_VERSION,
       manifest,
       logger: createLogger(manifest.id),
       events: {
