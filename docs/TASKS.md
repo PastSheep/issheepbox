@@ -172,8 +172,10 @@
 - 说明：TASK-008（agent-permission）合并时已在 pnpm-workspace.yaml 的 allowBuilds 中显式声明 `esbuild: true`（与已有 `electron: true` 同字段）并随分支落库；合并前实测 `pnpm install` 非交互通过（exit 0，lockfile 通过 supply-chain 校验，无 esbuild 构建审批弹窗、无 ERR_PNPM_IGNORED_BUILDS）。销项于 2026-10-13。
 
 ### P-003：修订 plugin-registry-schema.md 的 id pattern 对齐连字符
-- 状态：待处理
+- 状态：已解决（销项）
 - 说明：docs/plugin-registry-schema.md 第 5 节 id pattern（`^[a-z][a-z0-9]*(\.[a-z0-9]+)+$`）不含连字符，与权威规范冲突——docs/plugin-spec-v1.md 第 3.2 节 id 示例（com.example.my-tool）及 kernel manifest 校验（packages/kernel/src/manifest.ts）均接受连字符。TASK-007（agent-market）客户端已按规范权威放宽（parse.ts ID_RE 含 `-`，并有注释说明）。后续需修订 schema 的 id pattern 为 `^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$` 对齐，并回归 registry 机器校验流程。
+- **解决说明**（agent-fix/p003-registry-id，提交 cebc82e）：docs/plugin-registry-schema.md 第 5 节 id pattern 放宽为 ^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$，与 plugin-spec-v1.md §3.2 及 kernel manifest.ts ID_RE 对齐；同节 schema 配套 registry 上架 pending 方案：新增 status（active/pending）枚举，releaseUrl/downloadUrl 改条件必填（status=pending 可缺省，active 或缺省必填，draft-07 if/then/else）；第 3 节字段表与 6.1 维护流程同步补充 pending→active 流转。registry 仓库 schemas/plugins.schema.json 由上架任务按此形态镜像修订以保持同构。验证：schema JSON 合法、7 例语义用例全过、typecheck/lint exit 0。
+- **合并记录（merger）**：2026-10-14 审查通过并合并（merge `ef0b955`），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 36/36、approval-policy 32/32 测试通过；verify-examples.cjs 47 断言 × 5 场景通过。
 
 ### P-004：内置插件 version 钉死 0.0.0，应用升级后不刷新
 - 状态：待处理
