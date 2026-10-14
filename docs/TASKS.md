@@ -212,7 +212,7 @@
 
 ## v0.3.0 规划（方向已确认，待 v0.2.0 批次完成后派发）
 
-> 架构依据（2026-10-15 需求方确认）：「一切皆插件、最小可运行版本精简」——内核只保留**原语层**（loader/lifecycle/events/profile/权限接口 + fs 读写已有；本批补充进程执行原语），一切**业务能力以独立插件形态提供**（git 解析/拓扑 UI 均为插件）；插件依赖链（P-005 requires + 拓扑排序）作为聚合基础，插件组提供场景化组合。
+> 架构依据（2026-10-15 需求方确认）：「一切皆插件、最小可运行版本精简」——内核只保留**原语层**（loader/lifecycle/events/profile/权限接口 + fs 读写已有；本批补充进程执行原语），一切**业务能力以独立插件形态提供**（git 解析/拓扑 UI 均为插件）；插件依赖链（P-005 requires + 拓扑排序）作为聚合基础，插件组提供场景化组合；**插件发布与应用版本解耦**——应用发布（v0.x.0 tag）仅含内核 + 内置插件（shell-default/approval-policy），功能插件独立版本、独立 Release、由市场拉取（TASK-020）。
 
 ### TASK-016：内核进程执行原语（受权限门禁）
 - 状态：待派发（v0.3.0）
@@ -248,6 +248,15 @@
 - 需求描述：插件聚合层：manifest 新增 group 声明（组 id/成员/描述）；lifecycle 组生命周期——启用 A 自动按拓扑序启用其 requires 依赖、卸载组反转序逐一下线、依赖缺失阻止启用并提示；market-client 组安装（原子性：中途失败回滚）；registry 新增 groupEntry/group 字段。首个用例：git-service + git-topology 组成「Git 开发组」。
 - 验收标准：组启用/卸载顺序正确（依赖反转序）；依赖缺失阻止启用；组安装中途失败回滚无半残留；验证脚本覆盖；回归全绿。
 - 依赖：TASK-012（市场安装链路）
+- 完成时间：
+
+### TASK-020：插件独立发布流水线（发布与应用版本解耦）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（v0.2.0 完成后指派）
+- 分支：（v0.2.0 完成后指派）
+- 需求描述：功能插件发布流程落地，与应用 tag 完全解耦：① 单插件 zip 构建（复用 release/build_plugin_zips.py，支持按插件 id 构建，zip 命名含版本如 git-service-1.0.0.zip，顶层=插件 id）；② 上传独立 Release（如 tag git-service-v1.0.0，不进应用 v0.x.0 tag）；③ registry plugins.json 版本登记/更新流程（新 version + downloadUrl → status=active，validate_index.py 校验 0 error）；④ 文档化发布 SOP（docs/release-plugins.md）；⑤ 与 market-client update（TASK-012）对接：按 registry 版本比对拉新。应用安装包不含功能插件。
+- 验收标准：以 git-service（TASK-017 完成后）跑通一次端到端——构建 zip → 独立 Release 上传 → registry 登记新版本 → market-client 实测拉取/解析/版本比对；zip 结构校验；validate_index 0 error；发布不触发应用 tag、不进入应用安装包。
+- 依赖：TASK-017（git-service）、TASK-012（安装链路）、TASK-019（registry 组条目，如组发布一并处理）
 - 完成时间：
 
 ---
