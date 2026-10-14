@@ -210,6 +210,48 @@
 
 ---
 
+## v0.3.0 规划（方向已确认，待 v0.2.0 批次完成后派发）
+
+> 架构依据（2026-10-15 需求方确认）：「一切皆插件、最小可运行版本精简」——内核只保留**原语层**（loader/lifecycle/events/profile/权限接口 + fs 读写已有；本批补充进程执行原语），一切**业务能力以独立插件形态提供**（git 解析/拓扑 UI 均为插件）；插件依赖链（P-005 requires + 拓扑排序）作为聚合基础，插件组提供场景化组合。
+
+### TASK-016：内核进程执行原语（受权限门禁）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（v0.2.0 完成后指派）
+- 分支：（v0.2.0 完成后指派）
+- 需求描述：内核新增受限进程执行原语（对应权限目录 `shell:exec`，高危需二次确认）：命令白名单（git 只读命令集：`rev-list --parents` / `for-each-ref` / `show -s --format=...`）+ 参数校验（无 shell 拼接、禁止路径注入）+ 仓库路径白名单（用户授权）+ 输出大小限制；经 approval-policy 门禁（shell:exec 权限，二次确认）。为 git-service 插件（TASK-017）提供取数通道。备选路线（若评审确认更优）：fs 原语增强（目录枚举 + 二进制/zlib 读取）走纯解析路线，本任务改为 fs 增强。
+- 验收标准：白名单外命令拒绝；未授权拒绝；输出超限截断；无 shell 注入路径；kernel 回归 + 新增原语门禁用例；approval-policy 32、verify-examples 49×5 回归全绿。
+- 依赖：TASK-013（授权 UI）/ TASK-015（授权持久化）——门禁语义与来源判定
+- 完成时间：
+
+### TASK-017：git-service 独立插件（org.issheepbox.git-service）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（v0.2.0 完成后指派）
+- 分支：（v0.2.0 完成后指派）
+- 需求描述：独立服务形态插件（非内核能力，贯彻 EVP）：消费内核进程原语（TASK-016），调 git CLI 只读命令解析拓扑数据——`rev-list --all --parents` → 提交 DAG；`for-each-ref --format` → 分支/标签；`show -s --format` → 提交详情；输出拓扑数据模型（commits/refs/merge 结构），注册 `git:` 服务 + 事件；权限目录新增 `git:read`（中危：只读仓库元数据）。参考 git-history-ui（后端执行 git 命令）与 gitweb。
+- 验收标准：真实仓库取数正确（与 git CLI 原始输出对账）；服务注册/卸载无残留（effect scope 回滚）；git:read 未授权拒绝（fail-safe）；新增权限项中文展示/风险登记；回归全绿。
+- 依赖：TASK-016
+- 完成时间：
+
+### TASK-018：git-topology 面板插件（org.issheepbox.git-topology）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（v0.2.0 完成后指派）
+- 分支：（v0.2.0 完成后指派）
+- 需求描述：UI 面板插件，manifest 声明 `requires: org.issheepbox.git-service`（插件依赖链真实用例，配合 TASK-019 组功能）；右侧主区域渲染 SVG 拓扑图（分支线/合并点/commit 节点/ref 徽标，参考 gitweb.js 与 Git Overview）；点击 commit 查看详情（作者/时间/消息/变更文件）；仓库路径经用户授权选择。
+- 验收标准：真实仓库渲染拓扑正确；requires 依赖自动启用；面板随 effect scope 回滚（卸载无残留）；验证脚本覆盖；回归全绿。
+- 依赖：TASK-014（面板渲染）、TASK-017、TASK-019（插件组）
+- 完成时间：
+
+### TASK-019：插件组基础（manifest group + 生命周期联动 + registry 组条目）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（v0.2.0 完成后指派）
+- 分支：（v0.2.0 完成后指派）
+- 需求描述：插件聚合层：manifest 新增 group 声明（组 id/成员/描述）；lifecycle 组生命周期——启用 A 自动按拓扑序启用其 requires 依赖、卸载组反转序逐一下线、依赖缺失阻止启用并提示；market-client 组安装（原子性：中途失败回滚）；registry 新增 groupEntry/group 字段。首个用例：git-service + git-topology 组成「Git 开发组」。
+- 验收标准：组启用/卸载顺序正确（依赖反转序）；依赖缺失阻止启用；组安装中途失败回滚无半残留；验证脚本覆盖；回归全绿。
+- 依赖：TASK-012（市场安装链路）
+- 完成时间：
+
+---
+
 ## 跨任务待办（pending）
 
 > 非阻塞项，由下一个适用任务顺带处理（prompt 附加项）。
