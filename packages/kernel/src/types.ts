@@ -82,6 +82,18 @@ export interface ServiceRegistry {
 }
 
 /**
+ * 可逆 effects 句柄（ctx.effects，P-007 新增）。
+ *
+ * events.on / services.register 的 cleanup 由内核自动登记进插件的 effect scope；
+ * 但经第三方 service（如 shell:ui.registerPanel）返回的 unregister，内核无法自动
+ * 跟踪——插件把它登记到这里，即与 events/services 同 scope，卸载时逆序自动执行。
+ */
+export interface EffectsRegistry {
+  /** 追加一个 cleanup 函数；插件 unmount 时逆序自动调用（同 events/services 的回滚 scope）。 */
+  add(fn: () => void): void;
+}
+
+/**
  * 内核暴露给插件的 ctx API v1。
  *
  * v1 初始接口面（TASK-002 交付）：
@@ -89,6 +101,8 @@ export interface ServiceRegistry {
  *  - logger：日志
  *  - events：发布/订阅
  *  - services：服务注册与消费
+ *  - effects（P-007 增补）：登记任意 cleanup（如第三方 service 返回的 unregister），
+ *    与 events/services 同 effect scope，卸载时自动回滚
  *
  * 后续 minor 版本只增不破（见 plugin-spec-v1.md 第 12 节）：
  *  - ctx.commands / ctx.panels（TASK-006）
@@ -107,6 +121,8 @@ export interface PluginContext {
   readonly events: EventBus;
   /** 服务注册表（跨插件请求/响应）。 */
   readonly services: ServiceRegistry;
+  /** 可逆 effects：登记任意 cleanup，随插件卸载自动逆序回滚（P-007 增补）。 */
+  readonly effects: EffectsRegistry;
 }
 
 /** 插件入口模块：默认导出一个工厂函数。 */

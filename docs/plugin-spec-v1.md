@@ -335,12 +335,14 @@ export default async function main(ctx: PluginContext): Promise<void> {
 | `ctx.logger` | 日志 | `debug/info/warn/error(msg, ...args)` | TASK-002 |
 | `ctx.events` | 事件总线（发布/订阅） | `on(event, handler): unsubscribe`、`off(event, handler)`、`emit(event, ...args)` | TASK-002 |
 | `ctx.services` | 服务注册表（请求/响应） | `register(name, service)`、`get(name): service`、`has(name): boolean` | TASK-002 |
+| `ctx.effects` | 可逆 effects（登记任意 cleanup） | `add(fn: () => void): void`——与 events/services 同 scope，卸载时自动逆序执行 | P-007 |
 
 **后续 minor 版本将追加**（不破坏已有插件；截至 TASK-009 均**未交付**，
 修订说明见文末规范反馈 F-002）：
 
 - `ctx.commands` / `ctx.panels` — 未交付。v1 可用的 UI seam 是默认壳注册的
-  `shell:ui` **service**（TASK-006：`registerPanel(panelId, title)`），经
+  `shell:ui` **service**（TASK-006：`registerPanel(panelId, title): () => void`，
+  返回 unregister，经 `ctx.effects.add()` 登记后卸载自动回滚，见 P-007），经
   `ctx.services.get('shell:ui')` 使用。
 - `ctx.storage` / `ctx.config` — 未交付（TASK-004 仅交付 ProfileEngine 配置引擎，
   未暴露 `ctx.storage`）。
@@ -354,7 +356,8 @@ export default async function main(ctx: PluginContext): Promise<void> {
 **服务命名规范**：小写字母与连字符，如 `theme`、`storage`、`clipboard`。
 **UI seam 说明（v1）**：工具插件注册面板/工具箱入口走 `shell:ui` 服务
 （`ctx.services.get('shell:ui').registerPanel(...)`），不直接操作 DOM；
-面板记录为宿主侧状态，不参与内核可逆 effects（见规范反馈 F-006 / P-006）。
+`registerPanel` 返回 unregister 函数，注册方经 `ctx.effects.add()` 登记后，
+插件卸载时面板记录随 effect scope 自动回滚（P-007 闭环规范反馈 F-006）。
 
 ---
 
@@ -381,15 +384,18 @@ export default async function main(ctx: PluginContext): Promise<void> {
 
 - `ctx.events.on()` → 自动 `off()`
 - `ctx.services.register()` → 自动注销服务
+- `ctx.effects.add(fn)` → 自动执行 `fn`（P-007：用于第三方 service 返回的
+  unregister，如 `shell:ui.registerPanel` 的返回值）
 - `ctx.commands.register()` → 自动注销命令（**未交付**，见 F-002；v1 无此 API）
 - `ctx.panels.open()` 注册的面板 → 自动关闭（**未交付**，见 F-002；v1 无此 API）
 
 **插件开发者无需写 cleanup 函数**。这是 v1 的硬约定，也是与 Cordis/DSH 的重要区别——简化插件代码的同时保证卸载干净。
 
-> **v1 实际边界（TASK-009 修订）**：上述回滚仅覆盖内核可跟踪的
-> `ctx.events.on` / `ctx.services.register`。经 `shell:ui.registerPanel()`
-> 注册的面板记录在壳插件内部（宿主侧状态），**不**随插件卸载自动回滚
-> （见规范反馈 F-006 / TASKS.md P-006）。
+> **v1 实际边界（P-007 修订）**：上述回滚覆盖内核可跟踪的
+> `ctx.events.on` / `ctx.services.register`，以及 P-007 新增的
+> `ctx.effects.add(fn)`。经 `shell:ui.registerPanel()` 注册的面板记录在壳插件
+> 内部，但 `registerPanel` 返回 unregister、注册方经 `ctx.effects.add()` 登记后，
+> 插件卸载时面板记录随 effect scope 自动回滚——F-006 所述「面板残留」缺口已闭环。
 
 ---
 
@@ -591,8 +597,11 @@ import type { PluginContext } from '@issheepbox/kernel';
 export default async function main(ctx: PluginContext): Promise<void> {
   // 1) 经 shell:ui seam 注册面板（v1 唯一 UI 入口；壳未挂载时优雅降级）
   if (ctx.services.has('shell:ui')) {
-    const ui = ctx.services.get<{ registerPanel(id: string, title: string): void }>('shell:ui');
-    ui.registerPanel('note-main', '我的便签');
+    const ui = ctx.services.get<{
+      registerPanel(id: string, title: string): () => void;
+    }>('shell:ui');
+    // P-007：把返回的 unregister 登记进 effect scope，卸载时面板记录自动回滚
+    ctx.effects.add(ui.registerPanel('note-main', '我的便签'));
   }
 
   // 2) 命令事件示范：宿主/其他插件触发 note:new，本插件响应
@@ -653,9 +662,10 @@ export default async function main(ctx: PluginContext): Promise<void> {
 </html>
 ```
 
-> **v1 边界（F-006）**：`shell:ui.registerPanel` 目前仅记录面板清单，未实现
-> webview 挂载；面板 HTML 随包交付，待壳接入后由宿主加载。面板注册是宿主侧
-> 状态，不随插件卸载自动回滚（见 5.2 节与 TASKS.md P-006）。
+> **v1 边界（P-007 修订 F-006）**：`shell:ui.registerPanel` 目前仅记录面板清单，
+> 未实现 webview 挂载；面板 HTML 随包交付，待壳接入后由宿主加载。
+> `registerPanel` 返回 unregister，示例插件经 `ctx.effects.add()` 登记，
+> 插件卸载时面板记录随 effect scope 自动回滚（见 5.2 节）。
 
 ### 11.5 构建后产物（zip 内容）
 
@@ -709,7 +719,7 @@ org.example.note-1.0.0.zip
 | F-003 | §3.2 `id` 规则 | 正则 `[a-z][a-z0-9]*(\.[a-z0-9]+)+` 不含连字符，与示例 `com.example.my-tool`、kernel `ID_RE`（含 `-`）、§10 #3 及 P-003（registry schema）冲突 | 已修订：正则改为 `[a-z][a-z0-9-]*(\.[a-z0-9-]+)+`；P-003 待修订 registry schema 对齐 |
 | F-004 | §10 校验 #7/#8 | `requires` 依赖校验与依赖图无环**未实现**（DependencyResolver 占位，loader 不解析 requires） | 已修订：校验表标注实现状态；建议后续任务实现 DependencyResolver 或明确降级为文档声明。**已闭环（P-005）**：DependencyResolver 已实现并接入 Kernel.start()，#7/#8 生效 |
 | F-005 | §5.1 生命周期 | `start` / `stop` 阶段未实现（LifecycleManager 仅 load→mount→unmount；`PluginState` 只出现 mounted/unmounted） | 已修订：标注 start/stop 为设计目标；建议后续 minor 暴露生命周期钩子时补语义 |
-| F-006 | §5.2 / §6.2 / shell:ui seam | `shell:ui.registerPanel` 仅向壳内数组 push，无 unregister、不参与内核 effect scope → 插件卸载后面板记录残留，与「卸载无残留」契约不符 | 已修订：文档标注 v1 边界；登记 **P-006**：建议 shell:ui 的 registerPanel 返回 unregister 或由内核/壳做 effect 包装 |
+| F-006 | §5.2 / §6.2 / shell:ui seam | `shell:ui.registerPanel` 仅向壳内数组 push，无 unregister、不参与内核 effect scope → 插件卸载后面板记录残留，与「卸载无残留」契约不符 | 已修订：文档标注 v1 边界；登记 **P-006**（编号顺延后为 P-007）：建议 shell:ui 的 registerPanel 返回 unregister 或由内核/壳做 effect 包装。**已闭环（P-007）**：registerPanel 返回 unregister、内核新增 `ctx.effects.add(fn)`（与 events/services 同 scope），注册方（note）登记后卸载自动回滚面板记录；§4.2/§5.2/§11.3 契约已同步 |
 | F-007 | §7.1 权限工作流 | ProfileEngine.enable 未强制查询授权（`opts.permissions` 为占位 void），“拒绝后不可启用”依赖宿主流程先经 approval-policy 请求授权 | 已修订：文档标注 v1 集成点（宿主门禁 + 插件运行时自检）；登记 **P-005**：建议 ProfileEngine 接入 PermissionStore/approval-policy |
 | F-008 | §9.1 / files:read | 规范禁止插件使用 node:fs，但 v1 无宿主 `files` 能力服务，`files:read` 插件无实际文件读取通道（file-stats 采用“宿主经服务/事件传入文本内容”沙箱模式） | 登记 **P-008**：建议提供受 approval-policy 约束的宿主 files capability service |
 | F-009 | §3.3 示例 manifest | `permissions` 含 `storage:plugin`，与「默认授予、无需声明」表述有张力（无害） | 建议后续示例注明 `storage:plugin` 可省略 |

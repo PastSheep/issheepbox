@@ -127,6 +127,7 @@ export class LifecycleManager {
    * 构造一个带 effect 跟踪的 ctx：
    *  - ctx.events.on() 返回的 unsubscribe 自动登记进 scope
    *  - ctx.services.register() 后自动登记 unregister 进 scope
+   *  - ctx.effects.add(fn)（P-007）把第三方 service 返回的 cleanup 登记进同一 scope
    */
   private createScopedCtx(
     manifest: PluginManifest,
@@ -162,6 +163,13 @@ export class LifecycleManager {
         },
         has(name) {
           return registry.has(name);
+        },
+      },
+      effects: {
+        add(fn: () => void) {
+          // 与 events/services 自动登记的 cleanup 同 scope；
+          // scope 已 dispose 时 EffectScope.add 自身幂等忽略（如 mount 失败回滚后调用）。
+          scope.add(fn);
         },
       },
     };

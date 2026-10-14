@@ -7,10 +7,13 @@
  *    v1 不直接操作 DOM/壳（规范 §6.1）。shell:ui 由默认壳提供，缺失时优雅降级。
  *  - 插件间协作：消费 theme-service 的 `theme` 服务（ctx.services）并订阅
  *    `theme:changed` 事件（ctx.events），不直接 import 其他插件（规范 §8.1）。
- *  - 可逆 effects：事件监听/服务注册在卸载时由内核自动回滚（规范 §5.2）。
+ *  - 可逆 effects：事件监听/服务注册在卸载时由内核自动回滚（规范 §5.2）；
+ *    面板注册的 unregister 经 ctx.effects.add 登记进同一 scope，卸载时面板记录
+ *    同样自动回滚（P-007，闭环规范反馈 F-006）。
  *
- * 注意：ctx 只使用 v1 已交付接口（manifest / apiVersion / logger / events / services），
- * 不使用规范 §11 示例中的 ctx.commands / ctx.panels / ctx.storage（尚未交付，见规范反馈）。
+ * 注意：ctx 只使用 v1 已交付接口（manifest / apiVersion / logger / events /
+ * services / effects），不使用规范 §11 示例中的 ctx.commands / ctx.panels /
+ * ctx.storage（尚未交付，见规范反馈）。
  */
 import type { PluginContext } from '@issheepbox/kernel';
 
@@ -19,7 +22,7 @@ const PANEL_ID = 'note-main';
 
 /** shell:ui 服务形状（由默认壳插件注册，见 packages/shell-default/src/index.ts）。 */
 interface ShellUiShape {
-  registerPanel(panelId: string, title: string): void;
+  registerPanel(panelId: string, title: string): () => void;
 }
 
 /** theme-service 提供的主题服务形状（跨插件消费，仅作类型对齐）。 */
@@ -43,8 +46,11 @@ function registerPanel(ctx: PluginContext): void {
     return;
   }
   const ui = ctx.services.get<ShellUiShape>('shell:ui');
-  ui.registerPanel(PANEL_ID, '我的便签');
-  ctx.logger.info(`已向默认壳注册面板 ${PANEL_ID}`);
+  // P-007：把壳返回的 unregister 登记进本插件 effect scope——卸载时面板记录
+  // 随 scope dispose 自动回滚，符合规范 §5.2「卸载无残留」契约。
+  const unregister = ui.registerPanel(PANEL_ID, '我的便签');
+  ctx.effects.add(unregister);
+  ctx.logger.info(`已向默认壳注册面板 ${PANEL_ID}（卸载时自动回滚）`);
 }
 
 /**
