@@ -285,3 +285,117 @@ describe('ApprovalPolicy.checkPermission 运行时边界', () => {
     expect(policy.checkPermission(ID, 'network:fetch')).toBe(false);
   });
 });
+
+describe('ApprovalPolicy.requestApproval 启动路径语义（boot/restore/switchTo，C2）', () => {
+  /** 预置一条 granted 记录并返回策略。 */
+  function seedGranted(permissions: string[]) {
+    const store = new MemoryApprovalStore();
+    const prompter = new FakePrompter({ kind: 'grant-all' });
+    store.set({
+      pluginId: ID,
+      status: 'granted',
+      permissions,
+      decidedAt: new Date().toISOString(),
+    });
+    const policy = new ApprovalPolicy({ store, prompter });
+    return { policy, store, prompter };
+  }
+
+  it('boot：已有 granted 记录覆盖全部声明 → 自动 granted(auto)，不弹窗', async () => {
+    const { policy, prompter, store } = seedGranted(['files:read']);
+    const before = store.get(ID);
+
+    const decision = await policy.requestApprovalForManifest(
+      makeManifest({ permissions: ['files:read'] }),
+      'boot',
+    );
+    expect(decision.status).toBe('granted');
+    if (decision.status === 'granted') {
+      expect(decision.auto).toBe(true);
+      expect(decision.permissions).toEqual(['files:read']);
+    }
+    expect(prompter.prompts).toEqual([]);
+    // 记录不被重写（decidedAt 不变）。
+    expect(store.get(ID)).toBe(before);
+  });
+
+  it('boot：已有 denied 记录 → denied 并复用原因，不弹窗、不重写记录', async () => {
+    const store = new MemoryApprovalStore();
+    const prompter = new FakePrompter({ kind: 'grant-all' });
+    store.set({
+      pluginId: ID,
+      status: 'denied',
+      permissions: [],
+      decidedAt: new Date().toISOString(),
+      reason: '用户此前拒绝（测试预置）',
+    });
+    const policy = new ApprovalPolicy({ store, prompter });
+
+    const decision = await policy.requestApprovalForManifest(
+      makeManifest({ permissions: ['files:read'] }),
+      'restore',
+    );
+    expect(decision.status).toBe('denied');
+    if (decision.status === 'denied') {
+      expect(decision.reason).toBe('用户此前拒绝（测试预置）');
+    }
+    expect(prompter.prompts).toEqual([]);
+    expect(store.get(ID)?.status).toBe('denied');
+  });
+
+  it('boot：无记录 → denied（fail-safe），不弹窗、绝不写入记录', async () => {
+    const { policy, store, prompter } = createPolicy({ kind: 'grant-all' });
+
+    const decision = await policy.requestApprovalForManifest(
+      makeManifest({ permissions: ['files:read'] }),
+      'boot',
+    );
+    expect(decision.status).toBe('denied');
+    if (decision.status === 'denied') {
+      expect(decision.reason).toContain('boot');
+      expect(decision.reason).toContain('不弹窗');
+    }
+    // 关键：无记录场景下启动路径不得写记录，否则用户尚未决策即被永久锁死。
+    expect(prompter.prompts).toEqual([]);
+    expect(store.get(ID)).toBeUndefined();
+    expect(store.list()).toEqual([]);
+  });
+
+  it('switchTo：granted 记录未覆盖新增权限 → denied，不弹窗、不改写既有 granted 记录', async () => {
+    const { policy, prompter, store } = seedGranted(['files:read']);
+
+    const decision = await policy.requestApprovalForManifest(
+      makeManifest({ permissions: ['files:read', 'shell:exec'] }),
+      'switchTo',
+    );
+    expect(decision.status).toBe('denied');
+    expect(prompter.prompts).toEqual([]);
+    // 既有 granted 记录原样保留（不被降级成 denied）。
+    expect(store.get(ID)?.status).toBe('granted');
+    expect(store.get(ID)?.permissions).toEqual(['files:read']);
+  });
+
+  it('boot：空权限插件直通 granted(auto)，不弹窗、不写记录', async () => {
+    const { policy, store, prompter } = createPolicy({ kind: 'grant-all' });
+
+    const decision = await policy.requestApprovalForManifest(
+      makeManifest({ permissions: [] }),
+      'boot',
+    );
+    expect(decision.status).toBe('granted');
+    if (decision.status === 'granted') expect(decision.auto).toBe(true);
+    expect(prompter.prompts).toEqual([]);
+    expect(store.get(ID)).toBeUndefined();
+  });
+
+  it('对照：缺省 source（安装/启用）无记录时仍弹窗并写决策记录', async () => {
+    const { policy, store, prompter } = createPolicy({ kind: 'deny' });
+
+    await policy.requestApprovalForManifest(
+      makeManifest({ permissions: ['files:read'] }),
+      'install',
+    );
+    expect(prompter.prompts).toHaveLength(1);
+    expect(store.get(ID)?.status).toBe('denied');
+  });
+});
