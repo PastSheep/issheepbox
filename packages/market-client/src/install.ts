@@ -176,16 +176,24 @@ export function validatePluginZip(buf: Buffer, pluginId: string): ValidatedZip {
 /**
  * 把已校验的 zip 解压到 destDir（临时目录）。
  *
- * 调用方必须先 validatePluginZip；本函数仍逐条防御性校验路径（不信任 zip 内容）。
+ * 调用方必须先 validatePluginZip（得到 topDir）；zip 顶层目录 `<topDir>/` 前缀在此剥除，
+ * 使 destDir 本身即插件包根（destDir/plugin.json 直接存在）。
+ * 本函数仍逐条防御性校验路径（不信任 zip 内容）。
  * 失败时由调用方负责清理 destDir（install/update 均在 try/catch 中清理）。
  */
-export function extractZipTo(buf: Buffer, destDir: string): void {
+export function extractZipTo(buf: Buffer, destDir: string, topDir: string): void {
   const zip = openZip(buf);
   fs.mkdirSync(destDir, { recursive: true });
+  const prefix = `${topDir}/`;
   for (const entry of zip.getEntries()) {
     const name = entry.entryName;
     assertSafeEntryName(name);
-    const target = path.join(destDir, ...name.split('/'));
+    if (!name.startsWith(prefix)) {
+      throw new MarketInstallError('INVALID_ZIP', `zip 条目不在顶层目录内：${name}`);
+    }
+    const relative = name.slice(prefix.length);
+    if (relative === '') continue;
+    const target = path.join(destDir, ...relative.split('/'));
     // 双重保险：resolve 后必须仍在 destDir 下。
     const resolved = path.resolve(target);
     if (path.relative(path.resolve(destDir), resolved).startsWith('..')) {

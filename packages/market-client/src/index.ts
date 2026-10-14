@@ -37,6 +37,13 @@ import { compareVersions } from './versions';
 export * from './types';
 export { parseRegistryIndex, SUPPORTED_REGISTRY_VERSIONS } from './parse';
 export { compareVersions, parseSemver } from './versions';
+export {
+  PLUGIN_ID_RE,
+  assertValidPluginId,
+  validatePluginZip,
+  extractZipTo,
+} from './install';
+export type { ValidatedZip, ZipManifest } from './install';
 
 /**
  * registry 索引默认地址。
@@ -323,14 +330,14 @@ export class MarketClient {
 
     const buf = await this.download(pluginId);
     // 校验在解压前完成：失败不产生任何磁盘残留。
-    const { manifest } = validatePluginZip(buf, pluginId);
+    const { topDir, manifest } = validatePluginZip(buf, pluginId);
 
     const tmpDir = path.join(
       dir,
       `.install-${pluginId}-${process.pid}-${randomBytes(4).toString('hex')}`,
     );
     try {
-      extractZipTo(buf, tmpDir);
+      extractZipTo(buf, tmpDir, topDir);
       fs.renameSync(tmpDir, targetDir);
     } catch (err) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -393,7 +400,7 @@ export class MarketClient {
     }
 
     const buf = await this.downloadUrl(entry.downloadUrl);
-    validatePluginZip(buf, pluginId);
+    const { topDir } = validatePluginZip(buf, pluginId);
 
     const tmpDir = path.join(
       dir,
@@ -404,7 +411,7 @@ export class MarketClient {
       `.backup-${pluginId}-${process.pid}-${randomBytes(4).toString('hex')}`,
     );
     try {
-      extractZipTo(buf, tmpDir);
+      extractZipTo(buf, tmpDir, topDir);
       fs.renameSync(targetDir, backupDir);
       try {
         fs.renameSync(tmpDir, targetDir);
