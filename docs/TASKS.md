@@ -159,6 +159,57 @@
 
 ---
 
+## v0.2.0（插件生态闭环）任务
+
+> 批次契约（跨任务接线，由合并者 2026-10-15 登记，执行 agent 必须遵守）：
+> - **C1 授权 UI 契约（013 shell ↔ 012 desktop ↔ 015 approval-policy）**：shell-default 注册服务 `approval-ui`（形状 = approval-policy 的 `ApprovalPrompter`：`prompt(request): Promise<ApprovalPromptResult>`）；实现经内核事件往返——发 `approval:ui-request`（载荷 `{ token, pluginId, pluginName, permissions: PermissionInfo[] }`）→ desktop 主进程桥接渲染进程弹权限清单对话框（全部/部分/拒绝）→ 以 `approval:ui-response`（`{ token, result: ApprovalPromptResult }`）回内核事件；超时 fail-safe 拒绝。approval-policy 挂载时：有 `approval-ui` 服务用之，否则 FailSafePrompter。权限中文名/用途/风险取自 approval-policy 权限目录（getPermissionInfo）。
+> - **C2 启动门禁契约（013 kernel ↔ 015 approval-policy）**：ProfileEngine 启动恢复路径（boot/restore/switchTo）对声明权限插件调用 `requestApprovalForManifest(manifest, source='boot'|'restore'|'switchTo')`，未授权不挂载；approval-policy 对 source ∈ {boot, restore, switchTo} 仅查存储不弹窗（granted 记录→自动 granted；denied/无记录→denied）。其余来源（enable/install/缺省）维持现行为。
+> - **C3 持久化接线（012 desktop ↔ 015 approval-policy）**：desktop 主进程在 kernel.start() 前注册宿主服务 `host:user-data`（`{ dir: string }`）；approval-policy 默认 store = 有 `host:user-data` 则 DiskApprovalStore(dir)，否则 MemoryApprovalStore。
+> - **C4 面板渲染契约（014 shell ↔ 012 desktop）**：shell:ui 的 panels 元素形状 `{ id, title, pluginId?, src?, html?, width?, height? }`（向后兼容：旧 2 参 registerPanel 仍有效）；desktop 渲染进程右侧主区域按此渲染——html 直接注入、src 经新 IPC `shell:read-plugin-asset` 读插件包资源、无面板显示占位；pushUiState 从 shell:ui 服务读取 panels 随 UI 状态下发。
+> - 合并顺序建议：012 与 015 可先合，013 尽量在 015 合并后合（避免启动路径弹窗的中间态），014 必须等 013 合并。
+
+### TASK-012：市场安装链路（install/uninstall/update + desktop 最小市场入口）
+- 状态：待派发
+- 负责 agent：agent-market-install
+- 分支：agent-market-install/feat-market-install
+- 需求描述：
+  - packages/market-client：落地 install/uninstall/update（现为 Promise<never> 占位）。install=下载 zip→完整性校验（zip 结构/plugin.json 可解析且顶层目录=插件 id）→解压到 pluginsDir（防路径穿越）；update=版本比对后替换；uninstall=移除目录。zip 约定：顶层目录=插件 id（含 plugin.json+package.json+dist+assets）。registry 4 个 downloadUrl 真实可下载（shell-default 0.1.0、note/file-stats/theme-service 1.0.0，v0.1.0 release 资产）。market-client 保持内核无关（不 import @issheepbox/kernel，TASK-007 边界），pluginsDir 经构造选项注入。
+  - apps/desktop：① kernel.start() 前注册宿主服务 host:user-data（C3）；② 权限对话框桥（C1）：监听 approval:ui-request→转发渲染进程→回发 approval:ui-response；③ 渲染进程：市场视图（拉 registry active 插件列表、安装/卸载/更新按钮）+ 权限清单对话框（全部/部分/拒绝）+ 面板挂载区（C4，无面板显示占位）；④ 安装编排：市场安装→（经 kernel.profile.enable 走授权门禁：无权限直通、带权限弹权限清单）→挂载；拒绝则已安装但不可启用；卸载=停用+移除目录+profile 移除。
+- 验收标准：端到端（干净 userData，Node 直连内核脚本复现）：安装 note→无权限直通→面板可渲染（内容元数据经 shell:ui 读取）；安装 file-stats→权限清单弹出（契约 C1 事件往返可测）；容错：网络失败/非法 zip/重复安装有明确错误且无半残留；desktop build/typecheck/lint 通过；kernel 63、approval-policy 32、verify-examples 49×5 回归全绿；新增针对性测试（install 容错等）。
+- 依赖：TASK-007（market-client 骨架）、TASK-011（打包）
+- 完成时间：
+
+### TASK-013：授权 UI（shell-default ApprovalPrompter）+ 启动路径门禁修复（kernel）
+- 状态：待派发
+- 负责 agent：agent-authz-ui
+- 分支：agent-authz-ui/feat-authz-ui
+- 需求描述：
+  ① shell-default 实现 ApprovalPrompter：注册服务 approval-ui（形状=ApprovalPrompter，C1）；实现方式=发 approval:ui-request 事件并等待 approval:ui-response（载荷按 C1，超时 fail-safe 拒绝）；权限中文名/用途/风险取自 approval-policy 权限目录。
+  ② kernel ProfileEngine 启动恢复路径门禁修复（真实问题：file-stats 未授权即被启用，P-006 门禁只拦显式 enable）：boot()/restore()/switchTo() 挂载 enabled 插件前，对声明权限的插件同样 requestApprovalForManifest(manifest, source='boot'/'restore'/'switchTo')——未授权（denied 或无记录）不挂载并记录（mountFailures 或等价可观测位置），profile.enabled 保持不动（用户后续可授权后重启用）；boot 时需保证 approval-policy 服务先就绪（enabled 含带权限插件且服务未挂载时先挂载 approval-policy 或等价机制）；enable() 显式门禁保持现状。内核改动仅限此门禁修复处。
+- 验收标准：无权限插件启动直通；带权限插件无授权记录/denied 时启动不挂载（启动恢复路径复测）；shell 挂载后 approval-ui 服务可被 approval-policy 消费；kernel 63 基线 + 新增启动门禁用例、approval-policy 32、verify-examples 49×5 回归全绿；typecheck/lint exit 0。
+- 依赖：TASK-006、TASK-008（P-006）
+- 完成时间：
+
+### TASK-014：面板渲染（shell:ui 面板挂载区）
+- 状态：待派发
+- 负责 agent：agent-panel-render
+- 分支：agent-panel-render/feat-panel-render
+- 需求描述：shell-default 扩展 shell:ui：registerPanel(panelId, title, options?: { pluginId?, src?, html?, width?, height? })——面板记录携带渲染内容元数据（C4）；panels 元素形状 { id, title, pluginId?, src?, html?, width?, height? } 向后兼容（旧 2 参调用仍有效）；note 面板经其 manifest ui.panels 声明（src=assets/panel.html、360×240），调用点顺带传参——仅允许修改 packages/plugins/note/src/index.ts 的 registerPanel 调用一处（含必要的类型对齐）；P-007 回滚契约保持（unregister 随 effect scope 移除，卸载面板记录无残留）。
+- 验收标准：registerPanel 后面板内容元数据可被宿主读取（shell:ui 服务面板数组形状符合 C4）；卸载后随 effect scope 移除（P-007 复测）；note 面板内容可被宿主渲染（端到端由 TASK-012 契约承接，本任务验证数据契约与回滚）；verify-examples.cjs 面板断言保持兼容；回归全绿。
+- 依赖：TASK-013（同包串行，须其合并后再开工）
+- 完成时间：
+
+### TASK-015：授权持久化（ApprovalStore 磁盘实现）
+- 状态：待派发
+- 负责 agent：agent-approval-store
+- 分支：agent-approval-store/feat-approval-store
+- 需求描述：approval-policy 落地持久化：① DiskApprovalStore（userData 下 approvals.json，原子写=临时文件+rename；set/delete 即落盘；构造时加载既有记录）；② createApprovalPolicyPlugin 默认接线：store=宿主服务 host:user-data（C3）存在则 DiskApprovalStore(dir) 否则 MemoryApprovalStore；prompter=服务 approval-ui（C1）存在则用之否则 FailSafePrompter；③ requestApproval 按 source 区分：source ∈ {boot, restore, switchTo} 为启动路径——仅查存储：granted 记录→自动 granted、denied/无记录→denied（不弹窗，fail-safe）；其余来源维持现行为（granted 覆盖自动复用、denied 记录复用不重复弹窗、需授权则经 prompter）。
+- 验收标准：重启后授权记录保留（磁盘 roundtrip：新实例读同一文件）；原子写（中断不产生半写文件——临时文件+rename 机制验证）；approval-policy 32 基线 + 新增持久化/来源语义用例；kernel 63、verify-examples 49×5 回归全绿。
+- 依赖：TASK-008（P-006）
+- 完成时间：
+
+---
+
 ## 跨任务待办（pending）
 
 > 非阻塞项，由下一个适用任务顺带处理（prompt 附加项）。
