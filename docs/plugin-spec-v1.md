@@ -520,9 +520,13 @@ plugin-name-x.y.z.zip
 | 8 | 依赖图无环 | 拒绝 |
 | 9 | 入口模块能成功加载并 resolve `main()` | 拒绝，不影响其他插件 |
 
-> **实现状态（TASK-009 修订）**：#1~#6、#9 已由内核实现；**#7/#8 未实现**
-> （`DependencyResolver` 为占位骨架，loader 不解析 `requires`，见规范反馈 F-004）。
-> 依赖缺失/循环依赖目前不阻塞加载，第三方插件请勿依赖该保护。
+> **实现状态（P-005 修订）**：#1~#9 全部已由内核实现。
+> #7/#8 由 `DependencyResolver`（`packages/kernel/src/dependency`）落实：
+> `Kernel.start()` 在 loader 扫描后统一解析 `requires`——缺失依赖 / 版本 range 不满足 /
+> 非法 range 拒绝该插件，依赖图有环则拒绝环上插件；被拒插件记入 `discoveryFailures`，
+> 通过者按拓扑顺序（依赖在前）进入可用集合，不影响其余插件。
+> 注：`requires` 的键为插件 ID；`service:*` 类内置服务依赖需内核通过 `ResolveOptions.provided`
+> 提供版本目录，当前 v1 尚无内置服务目录，未知键一律按缺少依赖拒绝。
 
 **失败隔离**：以上任何一条失败，仅该插件被禁用，宿主与其他插件正常运行。
 
@@ -703,7 +707,7 @@ org.example.note-1.0.0.zip
 | F-001 | §11.3 完整示例 | 示例使用未交付的 `ctx.commands` / `ctx.panels` / `ctx.storage`，第三方照抄无法运行 | 已重写为 v1 可运行版本（shell:ui seam + events/services），指向 `packages/plugins/note` |
 | F-002 | §4.2 后续追加表 / §5.2 回滚表 | 表中 `ctx.commands`/`ctx.panels`（标注 TASK-006）、`ctx.storage`/`ctx.config`（标注 TASK-004）、`ctx.permissions`（标注 TASK-008）、`ctx.ui` 均未交付；TASK-006 实际交付 `shell:ui` service、TASK-008 实际交付 `approval-policy` service | 已修订：注明未交付状态，v1 UI seam = `shell:ui` service、权限服务 = `approval-policy` service |
 | F-003 | §3.2 `id` 规则 | 正则 `[a-z][a-z0-9]*(\.[a-z0-9]+)+` 不含连字符，与示例 `com.example.my-tool`、kernel `ID_RE`（含 `-`）、§10 #3 及 P-003（registry schema）冲突 | 已修订：正则改为 `[a-z][a-z0-9-]*(\.[a-z0-9-]+)+`；P-003 待修订 registry schema 对齐 |
-| F-004 | §10 校验 #7/#8 | `requires` 依赖校验与依赖图无环**未实现**（DependencyResolver 占位，loader 不解析 requires） | 已修订：校验表标注实现状态；建议后续任务实现 DependencyResolver 或明确降级为文档声明 |
+| F-004 | §10 校验 #7/#8 | `requires` 依赖校验与依赖图无环**未实现**（DependencyResolver 占位，loader 不解析 requires） | 已修订：校验表标注实现状态；建议后续任务实现 DependencyResolver 或明确降级为文档声明。**已闭环（P-005）**：DependencyResolver 已实现并接入 Kernel.start()，#7/#8 生效 |
 | F-005 | §5.1 生命周期 | `start` / `stop` 阶段未实现（LifecycleManager 仅 load→mount→unmount；`PluginState` 只出现 mounted/unmounted） | 已修订：标注 start/stop 为设计目标；建议后续 minor 暴露生命周期钩子时补语义 |
 | F-006 | §5.2 / §6.2 / shell:ui seam | `shell:ui.registerPanel` 仅向壳内数组 push，无 unregister、不参与内核 effect scope → 插件卸载后面板记录残留，与「卸载无残留」契约不符 | 已修订：文档标注 v1 边界；登记 **P-006**：建议 shell:ui 的 registerPanel 返回 unregister 或由内核/壳做 effect 包装 |
 | F-007 | §7.1 权限工作流 | ProfileEngine.enable 未强制查询授权（`opts.permissions` 为占位 void），“拒绝后不可启用”依赖宿主流程先经 approval-policy 请求授权 | 已修订：文档标注 v1 集成点（宿主门禁 + 插件运行时自检）；登记 **P-005**：建议 ProfileEngine 接入 PermissionStore/approval-policy |

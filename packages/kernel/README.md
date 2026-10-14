@@ -14,7 +14,7 @@ Is Sheep Box 自研**极薄内核**。边界见 `docs/requirements.md` 4.1：
 | 事件总线 | `src/events` | ✅ TASK-002：on/off/emit，on 返回 unsubscribe |
 | services 注册表 | `src/services` | ✅ TASK-002：register/get/has/unregister |
 | 生命周期 + 可逆 effects | `src/lifecycle` + `src/effect-scope` | ✅ TASK-003：mount/unmount，插件注册的服务/事件监听 unmount 时自动回滚 |
-| 依赖解析 / 拓扑排序 | `src/dependency` | 占位（TASK-002 骨架） |
+| 依赖解析 / 拓扑排序 | `src/dependency` | ✅ P-005：requires 校验（缺失/版本 range/非法 range）+ 环检测 + Kahn 拓扑排序，失败隔离，接入 Kernel.start() |
 | profile 配置引擎 | `src/profile` | 占位（TASK-004） |
 | apiVersion 兼容校验 | `src/loader` | 占位（TASK-005） |
 
