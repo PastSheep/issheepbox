@@ -342,7 +342,8 @@ export default async function main(ctx: PluginContext): Promise<void> {
 修订说明见文末规范反馈 F-002）：
 
 - `ctx.commands` / `ctx.panels` — 未交付。v1 可用的 UI seam 是默认壳注册的
-  `shell:ui` **service**（TASK-006：`registerPanel(panelId, title): () => void`，
+  `shell:ui` **service**（TASK-006：`registerPanel(panelId, title, options?): () => void`，
+  TASK-014 起 `options` 可携带面板内容元数据 `{ pluginId?, src?, html?, width?, height? }`，
   返回 unregister，经 `ctx.effects.add()` 登记后卸载自动回滚，见 P-007），经
   `ctx.services.get('shell:ui')` 使用。
 - `ctx.storage` / `ctx.config` — 未交付（TASK-004 仅交付 ProfileEngine 配置引擎，
@@ -359,6 +360,11 @@ export default async function main(ctx: PluginContext): Promise<void> {
 （`ctx.services.get('shell:ui').registerPanel(...)`），不直接操作 DOM；
 `registerPanel` 返回 unregister 函数，注册方经 `ctx.effects.add()` 登记后，
 插件卸载时面板记录随 effect scope 自动回滚（P-007 闭环规范反馈 F-006）。
+面板内容元数据契约（TASK-014，C4）：`registerPanel(panelId, title, options?)` 的
+`options = { pluginId?, src?, html?, width?, height? }` 会随注册条目暴露在
+`shell:ui.panels`（元素形状 `{ id, title } & PanelContentOptions`，未传字段缺省不出现，
+旧 2 参调用产生的条目仍为 `{ id, title }`，向后兼容）；宿主渲染进程据此挂载面板——
+`html` 直接注入、`src` 经 IPC `shell:read-plugin-asset` 读插件包资源。
 
 ---
 
@@ -610,10 +616,22 @@ export default async function main(ctx: PluginContext): Promise<void> {
   // 1) 经 shell:ui seam 注册面板（v1 唯一 UI 入口；壳未挂载时优雅降级）
   if (ctx.services.has('shell:ui')) {
     const ui = ctx.services.get<{
-      registerPanel(id: string, title: string): () => void;
+      registerPanel(
+        id: string,
+        title: string,
+        options?: { pluginId?: string; src?: string; html?: string; width?: number; height?: number },
+      ): () => void;
     }>('shell:ui');
     // P-007：把返回的 unregister 登记进 effect scope，卸载时面板记录自动回滚
-    ctx.effects.add(ui.registerPanel('note-main', '我的便签'));
+    // C4：随调用传内容元数据（与 manifest ui.panels[0] 对齐），宿主据此挂载面板
+    ctx.effects.add(
+      ui.registerPanel('note-main', '我的便签', {
+        pluginId: 'org.issheepbox.example.note',
+        src: 'assets/panel.html',
+        width: 360,
+        height: 240,
+      }),
+    );
   }
 
   // 2) 命令事件示范：宿主/其他插件触发 note:new，本插件响应
@@ -674,8 +692,10 @@ export default async function main(ctx: PluginContext): Promise<void> {
 </html>
 ```
 
-> **v1 边界（P-007 修订 F-006）**：`shell:ui.registerPanel` 目前仅记录面板清单，
-> 未实现 webview 挂载；面板 HTML 随包交付，待壳接入后由宿主加载。
+> **v1 边界（P-007 修订 F-006；TASK-014 补 C4）**：`shell:ui.registerPanel` 把面板
+> 清单（含 TASK-014 起随调用传入的内容元数据 `pluginId/src/html/width/height`）暴露在
+> `shell:ui.panels`，宿主渲染进程（TASK-012 desktop 侧）据此挂载面板——`html` 直接注入、
+> `src` 经 IPC `shell:read-plugin-asset` 读插件包资源、无面板显示占位。
 > `registerPanel` 返回 unregister，示例插件经 `ctx.effects.add()` 登记，
 > 插件卸载时面板记录随 effect scope 自动回滚（见 5.2 节）。
 
