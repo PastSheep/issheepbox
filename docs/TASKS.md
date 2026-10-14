@@ -207,13 +207,19 @@
   - infra 自动挂载语义与 approval-ui 事件契约已在上方「语义核对」登记；approval-ui 事件桥接渲染进程权限清单对话框由 TASK-012 desktop 承接。
 
 ### TASK-014：面板渲染（shell:ui 面板挂载区）
-- 状态：待派发
+- 状态：已完成
 - 负责 agent：agent-panel-render
 - 分支：agent-panel-render/feat-panel-render
 - 需求描述：shell-default 扩展 shell:ui：registerPanel(panelId, title, options?: { pluginId?, src?, html?, width?, height? })——面板记录携带渲染内容元数据（C4）；panels 元素形状 { id, title, pluginId?, src?, html?, width?, height? } 向后兼容（旧 2 参调用仍有效）；note 面板经其 manifest ui.panels 声明（src=assets/panel.html、360×240），调用点顺带传参——仅允许修改 packages/plugins/note/src/index.ts 的 registerPanel 调用一处（含必要的类型对齐）；P-007 回滚契约保持（unregister 随 effect scope 移除，卸载面板记录无残留）。
 - 验收标准：registerPanel 后面板内容元数据可被宿主读取（shell:ui 服务面板数组形状符合 C4）；卸载后随 effect scope 移除（P-007 复测）；note 面板内容可被宿主渲染（端到端由 TASK-012 契约承接，本任务验证数据契约与回滚）；verify-examples.cjs 面板断言保持兼容；回归全绿。
 - 依赖：TASK-013（同包串行，须其合并后再开工）
-- 完成时间：
+- 完成时间：2026-10-15
+- **合并记录（merger）**：2026-10-15 审查通过并合并（merge `ddc82c4`，分支 tip `4f53e33`，基于 `2e94ce8`；main 已前进至 `2ead606` 且增量为 TASK-012 合并（desktop/market-client/lockfile），与本分支改动文件零重叠，无冲突直接并入），远端分支 `agent-panel-render/feat-panel-render` 已删除。
+  - 审查结论：2 提交信息符合 conventions（`feat(shell-ui)` / `docs(plugin-spec)`，正文均写明改了什么/为什么/影响范围）；diff 范围 3 文件 +86/-15，全部位于 packages/shell-default/src/index.ts、packages/plugins/note/src/index.ts（经批准的唯一边界外改动）、docs/plugin-spec-v1.md，无 kernel/approval-policy/market-client/desktop/verify-examples.cjs/TASKS.md 夹带；无密钥/本机路径；无 dist/node_modules/lockfile/二进制入库。
+  - C4 契约要点：registerPanel 新增第三参 `options?: PanelContentOptions = { pluginId?, src?, html?, width?, height? }`，panels 元素 = `{ id, title } & PanelContentOptions`，实现为 `{ id: panelId, title, ...options }` 展开——未传字段缺省不出现；向后兼容旧 2 参调用条目键集恰为 `{ id, title }`；P-007 回滚契约不变——unregister 按 `panels.indexOf(panel)` 对象引用精确移除（容忍重复 panelId），注册/注销仍发 `shell:ui-refresh` reason=panel-registered/panel-unregistered；approval-ui 服务与全部事件订阅 diff 未触及、原样保留；宿主消费语义：html 直接注入、src 经 IPC `shell:read-plugin-asset` 读插件包资源（TASK-012 desktop 侧承接）。
+  - note 调用点批准说明：TASK-014 需求描述明确授权「仅允许修改 packages/plugins/note/src/index.ts 的 registerPanel 调用一处（含必要的类型对齐）」；分支实际改动恰为此文件一处调用（options `{ pluginId: 'org.issheepbox.example.note', src: 'assets/panel.html', width: 360, height: 240 }`，与 manifest ui.panels[0] 完全对齐）+ 局部 ShellUiShape/PanelContentOptions 类型定义，note 其余代码/资源/manifest 未动，未越界。plugin-spec-v1.md §4.2/§5.2/§11.3/§11.4 同步内容与实现一致。
+  - 冲突处理：无。分支基于 `2e94ce8`，main 增量（`3143007`/`2ead606`，TASK-012）位于 desktop/market-client/lockfile，与本分支改动零重叠，ort 策略直接并入。
+  - 合并后复跑验证：`pnpm install` exit 0（Already up to date）；`pnpm run typecheck` exit 0；`pnpm run lint` exit 0；`pnpm --filter @issheepbox/kernel test` 72/72 通过；`pnpm --filter @issheepbox/approval-policy test` 51/51 通过（5 个测试文件）；`node packages/plugins/verify-examples.cjs` 49 断言 × 5 场景全部通过；`pnpm --filter @issheepbox/market-client run verify:fixture` 47/47 通过；`pnpm --filter @issheepbox/desktop run build` exit 0；`node apps/desktop/scripts/verify-market-e2e.cjs` 30 断言 × 4 场景全部通过。
 
 ### TASK-015：授权持久化（ApprovalStore 磁盘实现）
 - 状态：已完成
