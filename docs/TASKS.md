@@ -169,7 +169,7 @@
 > - 合并顺序建议：012 与 015 可先合，013 尽量在 015 合并后合（避免启动路径弹窗的中间态），014 必须等 013 合并。
 
 ### TASK-012：市场安装链路（install/uninstall/update + desktop 最小市场入口）
-- 状态：待派发
+- 状态：已完成
 - 负责 agent：agent-market-install
 - 分支：agent-market-install/feat-market-install
 - 需求描述：
@@ -177,7 +177,15 @@
   - apps/desktop：① kernel.start() 前注册宿主服务 host:user-data（C3）；② 权限对话框桥（C1）：监听 approval:ui-request→转发渲染进程→回发 approval:ui-response；③ 渲染进程：市场视图（拉 registry active 插件列表、安装/卸载/更新按钮）+ 权限清单对话框（全部/部分/拒绝）+ 面板挂载区（C4，无面板显示占位）；④ 安装编排：市场安装→（经 kernel.profile.enable 走授权门禁：无权限直通、带权限弹权限清单）→挂载；拒绝则已安装但不可启用；卸载=停用+移除目录+profile 移除。
 - 验收标准：端到端（干净 userData，Node 直连内核脚本复现）：安装 note→无权限直通→面板可渲染（内容元数据经 shell:ui 读取）；安装 file-stats→权限清单弹出（契约 C1 事件往返可测）；容错：网络失败/非法 zip/重复安装有明确错误且无半残留；desktop build/typecheck/lint 通过；kernel 63、approval-policy 32、verify-examples 49×5 回归全绿；新增针对性测试（install 容错等）。
 - 依赖：TASK-007（market-client 骨架）、TASK-011（打包）
-- 完成时间：
+- 完成时间：2026-10-15
+  - 合并记录（merger）：
+    - 合并提交：3143007（merge --no-ff，基于 2e94ce8；分支 tip 89869ed，6 提交）。
+    - 审查结论：6 提交信息符合 conventions（feat/test/docs/fix 类型与范围齐全，正文均写明改了什么/为什么改/影响范围）；diff 范围 13 文件 +1580/-60，全部位于 packages/market-client（src/install.ts 新增、src/index.ts、src/types.ts、scripts/verify-fixture.mjs、README、package.json +adm-zip）与 apps/desktop（src/main.ts、src/preload.ts、index.html、tsconfig/package.json、scripts/verify-market-e2e.cjs 新增）及 pnpm-lock.yaml；无 kernel/approval-policy/shell-default/packages/plugins 夹带；无密钥/本机路径；无 dist/node_modules/二进制入库。
+    - 语义核对（TASK-012 + C1/C3/C4）：market-client——install=下载 zip→validatePluginZip（顶层唯一目录=插件 id、plugin.json 可解析且 id/version/entry 齐全、entry 文件在包内存在、拒绝绝对路径/盘符/.. 穿越条目）→解压（剥除 topDir 前缀，destDir 即包根，destDir/plugin.json 直接存在）→临时目录 rename 原子落盘，失败清理临时目录无半残留；uninstall=PLUGIN_ID_RE 正则 + resolve 路径守卫（basename===pluginId），只删合法 id 顶层目录；update=registry 版本>本地才下载，临时解压→现装改名备份→换入，换入失败回滚备份、成功后清备份；错误统一 MarketInstallError(code)（NETWORK/HTTP_STATUS/INVALID_ZIP/MANIFEST_INVALID/ID_MISMATCH/ALREADY_INSTALLED/NOT_INSTALLED/EXTRACT_FAILED/NOT_IN_REGISTRY/INVALID_PLUGIN_ID/PLUGINS_DIR_REQUIRED 共 11 类）；pluginsDir 经构造选项注入；install.ts 纯 node:fs，不 import kernel 运行时（PLUGIN_ID_RE 与 packages/kernel/src/manifest.ts ID_RE 逐字一致，头注释登记复制原因）。desktop——kernel.start() 前注册 host:user-data { dir }（C3）；approval:ui-request→IPC 转发渲染进程、approval:ui-response→回发内核事件，窗口已销毁时确定性 emit deny（C1，载荷形状与 shell-default ApprovalUiRequest/ResponsePayload {token,pluginId,pluginName,permissions}/{token,result} 一致）；pushUiState 附 panels（C4，shell:ui 缺失降级 []）；shell:read-plugin-asset 双重路径守卫（pluginId 正则 + 禁绝对路径/.. 段 + resolve 须落在插件目录内）。e2e——临时 userData/plugins + 注入假 fetchImpl（成功路径全部走本地 fixture zip，不访问真实 registry/github）；approval-policy 经 kernel.lifecycle.mount 编程挂载，prompter 模拟 C1 事件协议；note 无权限直通→enabled+mounted→panels 含 note 面板；file-stats 触发 C1 往返→deny→不可启用/未入 enabled；网络失败/损坏 zip/ID_MISMATCH/重复安装/邪恶路径卸载/卸载未安装容错均真实断言；update v1.0.0→v1.0.1 断言落盘 plugin.json 版本翻转。
+    - 冲突处理：无。分支基于 f4bbda8，main 增量（TASK-015/TASK-013 合并 + docs 登记）均为 approval-policy/kernel/shell-default/docs 改动，与本分支文件零重叠（lockfile 侧 main 未碰），ort 策略自动合并。
+    - 合并后复跑验证（仓库根真实复跑）：pnpm install exit 0（Lockfile is up to date，adm-zip 相关 +2 包落盘，lockfile 一致性通过）；pnpm run typecheck exit 0；pnpm run lint exit 0；pnpm --filter @issheepbox/kernel test 72/72；pnpm --filter @issheepbox/approval-policy test 51/51；node packages/plugins/verify-examples.cjs 49 断言×5 场景（exit 0；场景 D 经 approval-ui 事件往返等 120s 超时 deny，等待较长属预期）；pnpm --filter @issheepbox/market-client run verify:fixture 47/47；pnpm --filter @issheepbox/desktop run build exit 0；node apps/desktop/scripts/verify-market-e2e.cjs 30 断言×4 场景（exit 0）。
+    - 依赖登记：pnpm-lock.yaml 变更仅 adm-zip@0.6.1（纯 JS、无构建脚本）+ @types/adm-zip@0.6.0（stub，上游标注 deprecated 但无害）+ desktop→@issheepbox/market-client workspace 链接；无夹带无关条目。
+    - GitHub 不可达登记：本机 github.com 不可达，真实 downloadUrl 下载成功路径不在本地验证（仅网络失败容错测），验收成功路径一律本地 fixture zip 复现；registry 4 条目真实可下载性待批次末 github 连通后统一核对。
 
 ### TASK-013：授权 UI（shell-default ApprovalPrompter）+ 启动路径门禁修复（kernel）
 - 状态：已完成
