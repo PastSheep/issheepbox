@@ -11,9 +11,11 @@
     "verify:fixture": "node scripts/verify-fixture.mjs"
   },
   "dependencies": {
-    "@issheepbox/kernel": "workspace:*"
+    "@issheepbox/kernel": "workspace:*",
+    "adm-zip": "^0.6.1"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.6.0",
     "typescript": "^5.6.3"
   }
 }

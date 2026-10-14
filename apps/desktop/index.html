@@ -23,6 +23,16 @@
         background: #e3f2fd; color: #1565c0;
       }
       .badge.safe { background: #fff3e0; color: #e65100; }
+      .topbar .spacer { flex: 1; }
+      button {
+        font-size: 12px; padding: 5px 12px; border-radius: 6px;
+        border: 1px solid #ccc; background: #fff; cursor: pointer;
+      }
+      button:hover { background: #f0f0f0; }
+      button.primary { background: #1976d2; border-color: #1976d2; color: #fff; }
+      button.primary:hover { background: #1565c0; }
+      button.danger { background: #fff; border-color: #c62828; color: #c62828; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
       /* 主区域 */
       .main { display: flex; flex: 1; overflow: hidden; }
       .sidebar {
@@ -40,16 +50,63 @@
       .dot.on { background: #4caf50; }
       .dot.off { background: #ccc; }
       /* 面板区 */
-      .panel { flex: 1; padding: 24px; overflow-y: auto; }
+      .content { flex: 1; padding: 24px; overflow-y: auto; }
       .panel-placeholder {
         display: grid; place-items: center; height: 100%;
         color: #aaa; font-size: 14px;
       }
+      .panel-card {
+        background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+        padding: 16px; margin-bottom: 16px;
+      }
+      .panel-card h3 { font-size: 14px; margin-bottom: 8px; }
       .failure-list { margin-top: 12px; }
       .failure-item {
         padding: 8px 10px; background: #ffebee; border-radius: 6px;
         font-size: 12px; color: #c62828; margin-bottom: 4px;
       }
+      /* 市场视图 */
+      #market-view { display: none; }
+      .market-error {
+        background: #fff3e0; border: 1px solid #ffcc80; color: #e65100;
+        padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px;
+      }
+      .market-item {
+        background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+        padding: 12px 14px; margin-bottom: 10px;
+      }
+      .market-item .row1 { display: flex; align-items: center; gap: 8px; }
+      .market-item .name { font-size: 14px; font-weight: 600; }
+      .market-item .ver { font-size: 11px; color: #888; }
+      .market-item .desc { font-size: 12px; color: #666; margin: 6px 0; }
+      .chip {
+        font-size: 11px; padding: 1px 8px; border-radius: 10px;
+        background: #f3e5f5; color: #7b1fa2;
+      }
+      .chip.installed { background: #e8f5e9; color: #2e7d32; }
+      .market-item .actions { margin-top: 8px; display: flex; gap: 6px; }
+      /* 权限对话框模态 */
+      #approval-modal {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+        display: none; place-items: center; z-index: 10;
+      }
+      .modal-box {
+        background: #fff; border-radius: 10px; padding: 20px;
+        width: 420px; max-height: 80vh; overflow-y: auto;
+      }
+      .modal-box h2 { font-size: 15px; margin-bottom: 6px; }
+      .modal-box .sub { font-size: 12px; color: #888; margin-bottom: 12px; }
+      .perm-row {
+        display: flex; gap: 8px; align-items: flex-start;
+        padding: 8px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 6px;
+      }
+      .perm-row .label { font-size: 13px; font-weight: 600; }
+      .perm-row .desc { font-size: 12px; color: #666; }
+      .risk { font-size: 10px; padding: 1px 6px; border-radius: 8px; }
+      .risk.low { background: #e8f5e9; color: #2e7d32; }
+      .risk.medium { background: #fff3e0; color: #e65100; }
+      .risk.high { background: #ffebee; color: #c62828; }
+      .modal-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end; }
     </style>
   </head>
   <body>
@@ -57,6 +114,8 @@
       <h1>Is Sheep Box</h1>
       <span class="badge" id="profile-name">加载中…</span>
       <span class="badge safe" id="safe-mode" style="display:none">安全模式</span>
+      <span class="spacer"></span>
+      <button id="market-toggle">市场</button>
     </div>
     <div class="main">
       <aside class="sidebar">
@@ -64,14 +123,37 @@
         <div id="plugin-list"></div>
         <div class="failure-list" id="failure-list"></div>
       </aside>
-      <div class="panel">
-        <div class="panel-placeholder">面板占位 — 插件将在此渲染 UI</div>
+      <div class="content">
+        <div id="panels-view">
+          <div class="panel-placeholder">面板占位 — 插件将在此渲染 UI</div>
+        </div>
+        <div id="market-view">
+          <h2 style="font-size:13px;color:#888;margin-bottom:10px">插件市场</h2>
+          <div class="market-error" id="market-error" style="display:none"></div>
+          <div id="market-list"></div>
+        </div>
+      </div>
+    </div>
+    <div id="approval-modal">
+      <div class="modal-box">
+        <h2>插件权限申请</h2>
+        <div class="sub" id="approval-sub"></div>
+        <div id="approval-perms"></div>
+        <div class="modal-actions">
+          <button id="approval-deny">拒绝</button>
+          <button id="approval-subset">仅授权勾选</button>
+          <button id="approval-grant-all" class="primary">全部授权</button>
+        </div>
       </div>
     </div>
     <script>
       const $ = (id) => document.getElementById(id);
+      let uiState = null;
+      let marketOpen = false;
+      let approvalToken = null;
 
       function render(state) {
+        uiState = state;
         $('profile-name').textContent = 'profile: ' + state.profileName;
         $('safe-mode').style.display = state.safeMode ? '' : 'none';
 
@@ -95,7 +177,145 @@
           div.textContent = f.pluginId + ': ' + f.error;
           fl.appendChild(div);
         }
+
+        renderPanels(state.panels || []);
       }
+
+      // —— 面板挂载区（契约 C4）：html 直接注入；src 经 IPC 读插件包资源注入 ——
+      async function renderPanels(panels) {
+        const view = $('panels-view');
+        view.innerHTML = '';
+        if (!panels.length) {
+          view.innerHTML = '<div class="panel-placeholder">面板占位 — 插件将在此渲染 UI</div>';
+          return;
+        }
+        for (const panel of panels) {
+          const card = document.createElement('div');
+          card.className = 'panel-card';
+          const title = document.createElement('h3');
+          title.textContent = panel.title || panel.id;
+          card.appendChild(title);
+          const body = document.createElement('div');
+          card.appendChild(body);
+          view.appendChild(card);
+
+          if (panel.html) {
+            body.innerHTML = panel.html;
+          } else if (panel.src && panel.pluginId) {
+            try {
+              const res = await window.shellAPI.readPluginAsset(panel.pluginId, panel.src);
+              body.innerHTML = res.ok ? res.content : '(资源读取失败：' + res.message + ')';
+            } catch (e) {
+              body.textContent = '(资源读取失败)';
+            }
+          } else {
+            body.textContent = '(无内容元数据)';
+          }
+        }
+      }
+
+      // —— 市场视图 ——
+      function setMarketOpen(open) {
+        marketOpen = open;
+        $('market-view').style.display = open ? '' : 'none';
+        $('panels-view').style.display = open ? 'none' : '';
+        if (open) loadMarket();
+      }
+
+      async function loadMarket() {
+        const box = $('market-list');
+        box.innerHTML = '<div style="color:#aaa;font-size:13px">加载中…</div>';
+        const res = await window.shellAPI.market.list();
+        $('market-error').style.display = 'none';
+        box.innerHTML = '';
+        if (!res.ok) {
+          $('market-error').textContent =
+            '无法加载插件市场：' + (res.message || res.code) + '（registry 当前不可达时请检查网络）';
+          $('market-error').style.display = '';
+          return;
+        }
+        if ((res.topLevelErrors || []).length > 0) {
+          $('market-error').textContent = 'registry 索引结构异常：' + res.topLevelErrors.join('; ');
+          $('market-error').style.display = '';
+        }
+        const installed = new Map((res.installed || []).map((p) => [p.pluginId, p.version]));
+        for (const e of res.entries || []) {
+          const installedVer = installed.get(e.id);
+          const item = document.createElement('div');
+          item.className = 'market-item';
+          const perms = (e.permissions || []).join('、') || '无权限';
+          item.innerHTML =
+            '<div class="row1"><span class="name"></span>' +
+            '<span class="ver">v' + e.version + '</span>' +
+            (installedVer ? '<span class="chip installed">已装 v' + installedVer + '</span>' : '') +
+            '</div>' +
+            '<div class="desc"></div>' +
+            '<div>权限：' + perms + '</div>';
+          item.querySelector('.name').textContent = e.id;
+          item.querySelector('.desc').textContent = e.description;
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          const btnInstall = document.createElement('button');
+          btnInstall.textContent = installedVer ? '重装' : '安装';
+          btnInstall.onclick = async () => { await window.shellAPI.market.install(e.id); loadMarket(); window.shellAPI.requestState(); };
+          actions.appendChild(btnInstall);
+          if (installedVer && installedVer !== e.version) {
+            const btnUpdate = document.createElement('button');
+            btnUpdate.className = 'primary';
+            btnUpdate.textContent = '更新到 v' + e.version;
+            btnUpdate.onclick = async () => { await window.shellAPI.market.update(e.id); loadMarket(); window.shellAPI.requestState(); };
+            actions.appendChild(btnUpdate);
+          }
+          if (installedVer) {
+            const btnUninstall = document.createElement('button');
+            btnUninstall.className = 'danger';
+            btnUninstall.textContent = '卸载';
+            btnUninstall.onclick = async () => { await window.shellAPI.market.uninstall(e.id); loadMarket(); window.shellAPI.requestState(); };
+            actions.appendChild(btnUninstall);
+          }
+          item.appendChild(actions);
+          box.appendChild(item);
+        }
+        if (!(res.entries || []).length) {
+          box.innerHTML = '<div style="color:#aaa;font-size:13px">registry 暂无插件条目</div>';
+        }
+      }
+
+      $('market-toggle').onclick = () => setMarketOpen(!marketOpen);
+
+      // —— 权限清单对话框（契约 C1）——
+      window.shellAPI.onApprovalRequest((req) => {
+        approvalToken = req.token;
+        $('approval-sub').textContent = req.pluginName + '（' + req.pluginId + '）请求以下权限：';
+        const box = $('approval-perms');
+        box.innerHTML = '';
+        for (const p of req.permissions || []) {
+          const row = document.createElement('div');
+          row.className = 'perm-row';
+          row.innerHTML =
+            '<input type="checkbox" checked data-id="' + p.id + '">' +
+            '<div><div><span class="label"></span> <span class="risk ' + p.risk + '">' + p.risk + '</span></div>' +
+            '<div class="desc"></div></div>';
+          row.querySelector('.label').textContent = p.label || p.id;
+          row.querySelector('.desc').textContent = p.description || '';
+          box.appendChild(row);
+        }
+        $('approval-modal').style.display = 'grid';
+      });
+
+      function respondApproval(result) {
+        $('approval-modal').style.display = 'none';
+        window.shellAPI.approvalResponse({ token: approvalToken, result });
+        approvalToken = null;
+      }
+      $('approval-grant-all').onclick = () => respondApproval({ kind: 'grant-all' });
+      $('approval-deny').onclick = () => respondApproval({ kind: 'deny' });
+      $('approval-subset').onclick = () => {
+        const ids = [...document.querySelectorAll('#approval-perms input:checked')].map(
+          (c) => c.getAttribute('data-id'),
+        );
+        respondApproval({ kind: 'grant-subset', permissions: ids });
+      };
 
       window.shellAPI.onUiState(render);
       window.shellAPI.requestState();

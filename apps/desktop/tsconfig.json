@@ -7,7 +7,8 @@
     "types": ["node"]
   },
   "references": [
-    { "path": "../../packages/kernel" }
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/market-client" }
   ],
   "include": ["src/**/*"]
 }

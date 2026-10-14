@@ -7,12 +7,16 @@
  *
  * 覆盖：
  *  1. 含合法/非法条目的 plugins.fixture.json 解析（容错）
- *  2. MarketClient.fetchIndex / list 过滤 / getById / 占位接口 / 网络错误
+ *  2. MarketClient.fetchIndex / list 过滤 / getById / 网络错误
+ *  2a. TASK-012 安装类接口契约：未配置 pluginsDir → PLUGINS_DIR_REQUIRED；
+ *      id 守卫拒绝 '../evil'；update 未安装 → NOT_INSTALLED
  *  3. 顶层非法结构（null / 缺 plugins / plugins 非数组 / 空数组）
  *  4. compareVersions 语义
+ *  （zip 解压/安装成功路径由 apps/desktop/scripts/verify-market-e2e.cjs 覆盖）
  * 全部断言通过则 exit 0，任一失败 exit 1 并打印明细。
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pkg from '../dist/index.js';
@@ -173,14 +177,69 @@ async function main() {
 
   assert(client.invalidEntries().length === 8, 'invalidEntries() 暴露非法条目');
 
-  for (const name of ['download', 'install', 'uninstall', 'update']) {
-    let threw = false;
+  // TASK-012：download/install/uninstall/update 已落地。未配置 pluginsDir 时
+  // install/update/uninstall 抛类型化错误 PLUGINS_DIR_REQUIRED（构造缺省场景）。
+  let pluginsDirErr = null;
+  try {
+    await client.install('org.example.note');
+  } catch (err) {
+    pluginsDirErr = err;
+  }
+  assert(
+    pluginsDirErr && pluginsDirErr.code === 'PLUGINS_DIR_REQUIRED',
+    'install() 未配置 pluginsDir 时抛 MarketInstallError(code=PLUGINS_DIR_REQUIRED)',
+  );
+  pluginsDirErr = null;
+  try {
+    await client.uninstall('org.example.note');
+  } catch (err) {
+    pluginsDirErr = err;
+  }
+  assert(
+    pluginsDirErr && pluginsDirErr.code === 'PLUGINS_DIR_REQUIRED',
+    'uninstall() 未配置 pluginsDir 时抛 MarketInstallError(code=PLUGINS_DIR_REQUIRED)',
+  );
+  pluginsDirErr = null;
+  try {
+    await client.update('org.example.note');
+  } catch (err) {
+    pluginsDirErr = err;
+  }
+  assert(
+    pluginsDirErr && pluginsDirErr.code === 'PLUGINS_DIR_REQUIRED',
+    'update() 未配置 pluginsDir 时抛 MarketInstallError(code=PLUGINS_DIR_REQUIRED)',
+  );
+  // 非法插件 id：即使配置了 pluginsDir 也先被 id 正则拒绝（INVALID_PLUGIN_ID）。
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'isb-market-fixture-'));
+  try {
+    const dirClient = new MarketClient({
+      registryUrl: 'http://fixture.local/plugins.json',
+      fetchImpl: stubFetch(JSON.stringify(fixtureRaw)),
+      pluginsDir: tmpDir,
+    });
+    await dirClient.fetchIndex();
+    let idErr = null;
     try {
-      await client[name]('org.example.note');
+      await dirClient.uninstall('../evil');
     } catch (err) {
-      threw = err instanceof Error && err.message.includes('未实现');
+      idErr = err;
     }
-    assert(threw, `${name}() 占位接口抛错（提示未实现）`);
+    assert(
+      idErr && idErr.code === 'INVALID_PLUGIN_ID',
+      "uninstall('../evil') 被 id 守卫拒绝（code=INVALID_PLUGIN_ID）",
+    );
+    idErr = null;
+    try {
+      await dirClient.update('org.example.no-such-plugin');
+    } catch (err) {
+      idErr = err;
+    }
+    assert(
+      idErr && idErr.code === 'NOT_INSTALLED',
+      'update(未安装插件) 抛 code=NOT_INSTALLED',
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 
   let networkThrew = false;
@@ -268,7 +327,7 @@ async function main() {
     console.error('验证未通过');
     process.exit(1);
   }
-  console.log('验证通过：fixture 解析/查询/容错/占位接口全部符合预期');
+  console.log('验证通过：fixture 解析/查询/容错/安装类接口契约全部符合预期');
   process.exit(0);
 }
 
