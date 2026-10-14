@@ -212,9 +212,16 @@
 - **合并记录（merger）**：2026-10-14 审查通过并合并（merge `9476ab0`），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 36/36、approval-policy 32/32 测试通过；verify-examples.cjs 47 断言 × 5 场景通过。
 
 ### P-009：files:read 等权限缺少可消费的宿主能力服务
-- 状态：待处理
+- 状态：已解决（销项）
 - 来源：TASK-009 规范反馈 F-008（agent-examples）
 - 说明：规范 §9.1 禁止插件打包 Node 内置模块（fs/path），但 v1 无宿主 `files` 能力服务，带 `files:read` 的插件无实际文件读取通道（TASK-009 的 file-stats 示例采用「宿主经服务/事件传入文本内容」的沙箱模式）。建议后续任务提供受 approval-policy 约束的宿主 files capability service（files:read → 仅读、files:write → 仅写），作为权限语义的落地通道。
+- **解决说明**（agent-fix/p009-host-files，提交 c5572c2 / aa456dd / 71b0288）：① kernel 新增宿主 files 能力 ctx.files.readFile(path)/writeFile(path,content)（FilesCapability 接入 PluginContext；createScopedCtx 闭包捕获本插件 manifest.id，每次调用经 services 注册表查 'approval-policy'.checkPermission 做运行时门禁；profile/types.ts 新增 RuntimePermissionChecker 结构类型，内核不 import approval-policy 包，同 P-006 ApprovalGateway 先例；内部用 node:fs，插件仍被 §9.1 禁止直接用 fs/path）。fail-safe：服务未挂载或未授权一律抛错，无静默放行。② file-stats 由 statsOfText(text) 改为 statsOfFile(path)，经 ctx.files 读真实文件，纯文本统计保留为插件内纯函数 computeTextStats；挂载自检保留为第一道闸，宿主能力每次调用门禁为第二道/权威闸；files:write 为同步覆盖写最小实现（无路径白名单/追加/流式，留待后续 minor）。③ verify-examples.cjs 场景 C 改真实临时文件+statsOfFile、场景 E 补「服务不可用/未授权读文件被拒」；kernel 新增 files-capability.test.ts 三例（granted/denied/服务不可用）。④ plugin-spec-v1.md §4.2/§7.1/§9.1 同步，F-008 行保留历史原文并追加「已闭环（P-009）」注记。验证：typecheck/lint exit 0；kernel 63/63（60+3）、approval-policy 32/32；verify-examples.cjs 49 断言 × 5 场景通过（基线 46→49，文档原「47」系 P-007 时期残留笔误一并更正）。
+- **合并记录（merger）**：2026-10-14 审查通过并合并（merge `ae642704`），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 63/63、approval-policy 32/32 测试通过；verify-examples.cjs 49 断言 × 5 场景通过。
+
+### Registry 上架（跨任务待办）
+- 状态：已解决（销项）
+- 仓库：E:\Projects\IsSheepBox\workspaces\registry（origin → https://github.com/PastSheep/issheepbox-registry.git，独立仓库）
+- 解决说明（分支 agent-fix/registry-listing，提交 17af956 / 69fb7ae；registry main 合并提交 af62a13）：plugins.json 登记 4 个第一方插件（org.issheepbox.shell-default / example.note / example.file-stats / example.theme-service），均以 status=pending 占位——downloadUrl 需可 GET 的真实 zip 资产 URL，而插件均未发布过 zip（发布流水线 TASK-011 未跑通），故不伪造 URL，先以 pending 登记元数据，待发布流程产出 zip 后补 releaseUrl/downloadUrl 转 active；schemas/plugins.schema.json 镜像主仓库 docs/plugin-registry-schema.md §5（id 连字符 + status 枚举 + if/then/else 条件必填）；README 记录 pending 语义与流转条件。未上架 approval-policy（第一方基础设施、随应用内置，公开上架会与内置副本版本分裂）与 market-client（无 plugin.json，是客户端库包而非插件）。校验：jsonschema Draft7 0 error + 57 项语义断言 + 反向用例（active 缺 URL 正确报错）。
 
 ---
 
