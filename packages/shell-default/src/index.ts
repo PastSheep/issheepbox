@@ -20,18 +20,45 @@
  */
 import type { PluginContext } from '@issheepbox/kernel';
 
+/**
+ * 面板内容渲染元数据（契约 C4，TASK-014）：宿主渲染进程据此决定如何挂载面板。
+ * 全部可选——未传的字段不出现在 panels 条目里；旧 2 参 registerPanel 调用
+ * 产生的条目仍为 { id, title }，向后兼容既有消费方。
+ *
+ * 语义：
+ *  - html：宿主直接注入渲染（内联 HTML 字符串）
+ *  - src：指向插件包内资源（相对插件根，如 assets/panel.html），
+ *    宿主经 IPC shell:read-plugin-asset 读取插件包资源
+ *  - pluginId：面板所属插件（宿主读资源/定位插件目录用）
+ *  - width/height：面板建议尺寸（px），与 manifest ui.panels[] 声明对齐
+ */
+export interface PanelContentOptions {
+  pluginId?: string;
+  src?: string;
+  html?: string;
+  width?: number;
+  height?: number;
+}
+
 /** shell:ui service seam（供后续插件注册面板入口）。 */
 export interface ShellUiService {
   /**
-   * 注册一个面板入口（占位，TASK-006 仅记录，不实现 UI 挂载）。
+   * 注册一个面板入口。
    *
    * P-007：返回 unregister 函数——注册方（如 note）应把它登记进自身 ctx.effects，
    * 插件卸载时随 effect scope 自动回滚面板记录（规范 §5.2「卸载无残留」契约）。
    * 重复注册同一 panelId 时，每次返回的 unregister 只撤销本次注册产生的条目。
+   *
+   * options（契约 C4）：面板内容渲染元数据，随 panels 数组暴露给宿主；省略时
+   * 面板条目仅含 { id, title }（占位形态，向后兼容）。
    */
-  registerPanel: (panelId: string, title: string) => () => void;
-  /** 已注册面板列表。 */
-  panels: Array<{ id: string; title: string }>;
+  registerPanel: (
+    panelId: string,
+    title: string,
+    options?: PanelContentOptions,
+  ) => () => void;
+  /** 已注册面板列表（元素形状见 PanelContentOptions；未传的渲染字段缺省不出现）。 */
+  panels: Array<{ id: string; title: string } & PanelContentOptions>;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,13 +124,15 @@ export default function shellDefault(ctx: PluginContext): void {
   ctx.logger.info('默认壳已挂载');
 
   // 注册 shell:ui service：面板 seam，供其他插件贡献 UI 区域。
-  const panels: Array<{ id: string; title: string }> = [];
+  const panels: Array<{ id: string; title: string } & PanelContentOptions> = [];
   const uiService: ShellUiService = {
     panels,
-    registerPanel(panelId, title) {
+    registerPanel(panelId, title, options) {
       // P-007：面板记录本身是壳的宿主侧状态，内核无法自动跟踪第三方 service 的
       // 注册动作——因此返回 unregister，由注册方经 ctx.effects.add 挂进自身 scope。
-      const panel = { id: panelId, title };
+      // 契约 C4：把注册方传入的渲染元数据（pluginId/src/html/width/height）一并
+      // 记录进条目；旧 2 参调用时 options 缺省，条目仅含 { id, title }。
+      const panel = { id: panelId, title, ...options };
       panels.push(panel);
       ctx.events.emit('shell:ui-refresh', { reason: 'panel-registered', panelId });
       return () => {
