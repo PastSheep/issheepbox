@@ -56,6 +56,9 @@ export class IsSheepBoxKernel {
       userDataDir,
       lifecycle: this.lifecycle,
       events: this.events,
+      // P-006：把 services 注册表交给 ProfileEngine，使其在 enable() 时按名查询
+      // 'approval-policy' 服务做授权门禁；内核不 import approval-policy 包。
+      services: this.services,
     });
 
     const discovery = this.loader.loadAll(pluginsDir);
@@ -113,10 +116,15 @@ export {
 } from './compat';
 export type { CompatCheckResult } from './compat';
 export { ProfileEngine, DEFAULT_SHELL_ID } from './profile';
+export {
+  APPROVAL_SERVICE_NAME,
+} from './profile/types';
 export type {
   Profile,
   ProfileSnapshot,
   PermissionStore,
   BootResult,
+  ApprovalGateway,
+  ApprovalDecisionLike,
 } from './profile/types';
 export { PermissivePermissionStore } from './profile/types';
