@@ -20,9 +20,24 @@ import type { PluginContext } from '@issheepbox/kernel';
 /** 本插件在 shell:ui 注册的面板 ID（与 manifest ui.panels[0].id 一致）。 */
 const PANEL_ID = 'note-main';
 
-/** shell:ui 服务形状（由默认壳插件注册，见 packages/shell-default/src/index.ts）。 */
+/**
+ * shell:ui 服务形状（由默认壳插件注册，见 packages/shell-default/src/index.ts）。
+ * options 为面板内容渲染元数据（契约 C4），与本插件 manifest ui.panels[0] 对齐。
+ */
+interface PanelContentOptions {
+  pluginId?: string;
+  src?: string;
+  html?: string;
+  width?: number;
+  height?: number;
+}
+
 interface ShellUiShape {
-  registerPanel(panelId: string, title: string): () => void;
+  registerPanel(
+    panelId: string,
+    title: string,
+    options?: PanelContentOptions,
+  ): () => void;
 }
 
 /** theme-service 提供的主题服务形状（跨插件消费，仅作类型对齐）。 */
@@ -48,7 +63,14 @@ function registerPanel(ctx: PluginContext): void {
   const ui = ctx.services.get<ShellUiShape>('shell:ui');
   // P-007：把壳返回的 unregister 登记进本插件 effect scope——卸载时面板记录
   // 随 scope dispose 自动回滚，符合规范 §5.2「卸载无残留」契约。
-  const unregister = ui.registerPanel(PANEL_ID, '我的便签');
+  // 契约 C4：随调用传面板内容元数据（与 manifest ui.panels[0] 对齐），
+  // 宿主渲染进程据此经 IPC shell:read-plugin-asset 读 assets/panel.html 挂载。
+  const unregister = ui.registerPanel(PANEL_ID, '我的便签', {
+    pluginId: 'org.issheepbox.example.note',
+    src: 'assets/panel.html',
+    width: 360,
+    height: 240,
+  });
   ctx.effects.add(unregister);
   ctx.logger.info(`已向默认壳注册面板 ${PANEL_ID}（卸载时自动回滚）`);
 }
