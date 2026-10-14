@@ -133,15 +133,11 @@ function makePluginsDir(root, pluginsDir) {
   ok(fs.existsSync(pluginsDir), `临时 pluginsDir 就绪（${root}）`);
 }
 
-/** 宿主侧启用门禁（规范 §7.1 集成点）：先经 approval-policy 授权，granted 才 enable。 */
-async function enableIfApproved(kernel, loaded, source) {
-  const policy = kernel.services.get(APPROVAL_SERVICE_NAME);
-  const decision = await policy.requestApprovalForManifest(loaded.manifest, source);
-  if (decision.status === 'granted') {
-    await kernel.profile.enable(loaded.manifest.id);
-  }
-  return decision;
-}
+/**
+ * P-006：授权门禁已内置于 ProfileEngine.enable()——调用方直接 profile.enable(id)，
+ * 内核在 mount 前自行经 approval-policy 服务 requestApprovalForManifest 判定；
+ * granted 才进 enabled 并 mount，denied 不进 enabled。宿主不再需要先授权再 enable。
+ */
 
 function findLoaded(discovered, pluginId) {
   const loaded = discovered.find((p) => p.manifest.id === pluginId);
@@ -245,9 +241,9 @@ async function scenarioPermissionDeny(pluginsDir, userDataDir) {
 
   const fileStats = findLoaded(discovered, FILE_STATS_ID);
 
-  // 启用门禁：请求授权 → 拒绝 → 不启用
-  const decision = await enableIfApproved(kernel, fileStats, 'enable');
-  ok(decision.status === 'denied', 'requestApprovalForManifest 返回 denied（files:read 被拒）');
+  // P-006：门禁内置于 profile.enable —— 直接 enable，由内核自行查询授权。
+  // 注入的 denyPrompter 会在内部门禁内被触发一次：拒绝并记录。
+  await kernel.profile.enable(fileStats.manifest.id);
   ok(
     !kernel.lifecycle.mountedIds.includes(FILE_STATS_ID),
     '拒绝后插件未被挂载（不可启用）',
@@ -271,7 +267,7 @@ async function scenarioPermissionDeny(pluginsDir, userDataDir) {
   ok(deniedEvents[0].pluginId === FILE_STATS_ID, 'denied 事件载荷 pluginId 正确');
   ok(
     denyPrompter.prompts === 1,
-    '拒绝记录已持久化：再次请求不重复弹窗（prompter 仅提示 1 次）',
+    '拒绝记录已持久化：enable 内部门禁仅提示 1 次，事件路径复用拒绝记录不重复弹窗',
   );
 
   // 运行时校验语义：拒绝后 checkPermission = false
@@ -298,11 +294,18 @@ async function scenarioPermissionGrant(pluginsDir, userDataDir) {
 
   const fileStats = findLoaded(discovered, FILE_STATS_ID);
 
-  const decision = await enableIfApproved(kernel, fileStats, 'enable');
-  ok(decision.status === 'granted', 'requestApprovalForManifest 返回 granted');
-  ok(decision.auto === false, 'files:read 需用户决策（auto=false）');
-  ok(decision.permissions.includes('files:read'), '授予集合包含 files:read');
+  // P-006：门禁内置于 profile.enable —— 内部门禁经 GrantAllPrompter 授权后才挂载。
+  await kernel.profile.enable(fileStats.manifest.id);
   ok(kernel.lifecycle.mountedIds.includes(FILE_STATS_ID), '授权后插件已启用并挂载');
+  ok(
+    kernel.profile.getCurrent().enabled.includes(FILE_STATS_ID),
+    '授权后插件进入 profile.enabled',
+  );
+  ok(policy.isApproved(FILE_STATS_ID), '授权记录为 granted');
+  ok(
+    policy.getGrantedPermissions(FILE_STATS_ID).includes('files:read'),
+    '授予集合包含 files:read',
+  );
   ok(policy.checkPermission(FILE_STATS_ID, 'files:read') === true, '运行时 checkPermission=true');
 
   // 正常使用：file-stats 服务
@@ -344,14 +347,17 @@ async function scenarioFailSafeDefault(pluginsDir, userDataDir) {
 
   const outcome = await kernel.lifecycle.mount(makeInjectedApprovalPolicy({}));
   ok(outcome.ok === true, 'approval-policy（默认选项 → FailSafePrompter）已挂载');
-  const policy = kernel.services.get(APPROVAL_SERVICE_NAME);
 
   const fileStats = findLoaded(discovered, FILE_STATS_ID);
-  const decision = await policy.requestApprovalForManifest(fileStats.manifest, 'enable');
-  ok(decision.status === 'denied', 'FailSafePrompter 默认拒绝 files:read 授权');
+  // P-006：门禁内置于 enable —— FailSafePrompter 在内部门禁内默认拒绝。
+  await kernel.profile.enable(fileStats.manifest.id);
   ok(
     !kernel.lifecycle.mountedIds.includes(FILE_STATS_ID),
-    '默认拒绝下插件保持不可启用',
+    'FailSafePrompter 默认拒绝下插件保持未挂载',
+  );
+  ok(
+    !kernel.profile.getCurrent().enabled.includes(FILE_STATS_ID),
+    'FailSafePrompter 默认拒绝下插件未进入 profile.enabled',
   );
 
   await kernel.stop();

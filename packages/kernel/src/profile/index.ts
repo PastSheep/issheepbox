@@ -15,8 +15,12 @@
 import type { LoadedPlugin } from '../loader';
 import type { LifecycleManager } from '../lifecycle';
 import type { EventBusImpl } from '../events';
+import type { PluginManifest, ServiceRegistry } from '../types';
 import { ProfileStore } from './store';
 import {
+  APPROVAL_SERVICE_NAME,
+  type ApprovalDecisionLike,
+  type ApprovalGateway,
   type BootResult,
   type PermissionStore,
   type Profile,
@@ -50,6 +54,11 @@ export class ProfileEngine {
   private readonly store: ProfileStore;
   private readonly lifecycle: LifecycleManager;
   private readonly events: EventBusImpl;
+  /**
+   * 内核服务注册表（P-006）。enable() 经其按名查询 'approval-policy' 服务做授权
+   * 门禁；未注入或服务未挂载时，带权限插件按 fail-safe 拒绝。
+   */
+  private readonly services?: ServiceRegistry;
 
   /** 当前 profile（内存态）。 */
   private current: Profile;
@@ -61,11 +70,16 @@ export class ProfileEngine {
     lifecycle: LifecycleManager;
     events: EventBusImpl;
     permissions?: PermissionStore;
+    /** P-006：内核服务注册表，enable() 据此查询 approval-policy 授权网关。 */
+    services?: ServiceRegistry;
   }) {
     this.store = new ProfileStore(opts.userDataDir);
     this.lifecycle = opts.lifecycle;
     this.events = opts.events;
-    // opts.permissions 由 TASK-008 接入；本任务只定义接口与对接点，不实现权限逻辑。
+    this.services = opts.services;
+    // opts.permissions 为 TASK-008 的旧接缝（同步单权限查询）；P-006 起授权门禁改经
+    // services 注册表查询 'approval-policy' 服务的 requestApprovalForManifest（异步、
+    // 可弹窗、含授权/拒绝记录复用）。保留该形参不删，避免破坏既有用方。
     void opts.permissions;
 
     // 初始化当前 profile：优先读磁盘，否则创建 default。
@@ -141,9 +155,26 @@ export class ProfileEngine {
 
   /**
    * 启用插件：加入 enabled 列表，持久化，立即 mount。
+   *
+   * P-006：mount 前先经授权门禁（requestApprovalIfNeeded）：
+   *  - 插件未声明权限 → 自动放行，不弹窗；
+   *  - 带权限插件 → 经 'approval-policy' 服务 requestApprovalForManifest 判定；
+   *  - granted 才加入 enabled 并 mount；denied → 直接返回，不进 enabled、
+   *    不持久化、不 mount、不触发快照。
    */
   async enable(pluginId: string): Promise<void> {
     if (this.current.enabled.includes(pluginId)) return;
+    const loaded = this.available.get(pluginId);
+
+    // P-006 授权门禁（仅对已发现、可读到 manifest 的插件生效；未知 pluginId 维持
+    // 旧行为：仅登记进 enabled，不 mount）。
+    if (loaded) {
+      const decision = await this.requestApprovalIfNeeded(loaded.manifest);
+      if (decision.status === 'denied') {
+        return;
+      }
+    }
+
     this.snapshot();
     this.current.enabled.push(pluginId);
     if (!this.current.pluginConfig[pluginId]) {
@@ -151,10 +182,37 @@ export class ProfileEngine {
     }
     this.save();
 
-    const loaded = this.available.get(pluginId);
     if (loaded) {
       await this.lifecycle.mount(loaded);
     }
+  }
+
+  /**
+   * P-006：mount 前授权门禁。
+   *
+   * - 插件未声明权限（缺省或空数组）→ 自动放行，不弹窗。
+   * - 声明了权限 → 经 services 注册表查询 'approval-policy' 服务，由其做
+   *   requestApprovalForManifest 判定（含已有授权复用 / 拒绝记录复用 / 弹窗收集决策）。
+   * - 授权服务不可用（未注入 services 或该服务未挂载）→ 带权限插件一律拒绝
+   *   （fail-safe，无静默放行；与 TASK-008 FailSafePrompter 语义一致）。
+   */
+  private async requestApprovalIfNeeded(
+    manifest: PluginManifest,
+  ): Promise<ApprovalDecisionLike> {
+    const declared = manifest.permissions ?? [];
+    if (declared.length === 0) {
+      return { status: 'granted', pluginId: manifest.id, permissions: [], auto: true };
+    }
+    if (!this.services || !this.services.has(APPROVAL_SERVICE_NAME)) {
+      return {
+        status: 'denied',
+        pluginId: manifest.id,
+        permissions: declared,
+        reason: '授权服务（approval-policy）不可用，按 fail-safe 拒绝带权限插件',
+      };
+    }
+    const gateway = this.services.get<ApprovalGateway>(APPROVAL_SERVICE_NAME);
+    return gateway.requestApprovalForManifest(manifest, 'enable');
   }
 
   /**
