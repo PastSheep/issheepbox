@@ -184,9 +184,11 @@
 - **合并记录（merger）**：2026-10-14 审查通过并合并（merge 6e65b26d100e3dafccc8375656fd86c93fb67874），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 36/36、approval-policy 32/32 测试通过；verify-examples.cjs 47 断言 × 5 场景通过；desktop build exit 0；verify-builtin-refresh.cjs 14 断言通过。
 
 ### P-005：内核·依赖解析（requires 校验 / 拓扑排序）未实现
-- 状态：待处理
+- 状态：已解决（销项）
 - 来源：TASK-009 规范反馈 F-004（agent-examples）
 - 说明：docs/plugin-spec-v1.md §10 校验清单 #7（requires 依赖已安装且版本满足）/ #8（依赖图无环）标注为已实现，但 `packages/kernel/src/dependency/` 仍是占位骨架（resolveOrder 抛「未实现」），loader 不解析 `requires`。建议后续任务实现 DependencyResolver 并接入 loader，或在规范中明确降级为文档声明。
+- **解决说明**（agent-fix/p005-dependency，提交 fcca3c2/7a70d59）：DependencyResolver 落地——kernel.start() 接入 requires 校验（缺失依赖/版本 range 不满足/非法 range）+ 环检测 + Kahn 拓扑排序；失败隔离沿依赖边传播（被拒插件的依赖者连锁拒绝，无关插件照常加载）；loader 保持磁盘扫描单一职责，不合规插件并入 discoveryFailures。spec §10 #7/#8 从「未实现」翻转为「已实现」，F-004 闭环（7a70d59）。验证：typecheck/lint exit 0；kernel 52 项（36 基线+16 新增）、approval-policy 32 项、verify-examples 47×5 全绿；lifecycle/profile/services/events/manifest 行为未动。
+- **合并记录（merger）**：2026-10-14 审查通过并合并（merge 77bd2eafd876626943b472cfd96a08f9a7c6fdb8），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 52/52、approval-policy 32/32 测试通过；verify-examples.cjs 47 断言 × 5 场景通过。
 
 ### P-006：ProfileEngine.enable 未接入权限校验
 - 状态：待处理
