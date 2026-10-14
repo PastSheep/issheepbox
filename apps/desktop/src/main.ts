@@ -3,15 +3,25 @@ import fs from 'node:fs';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { IsSheepBoxKernel } from '@issheepbox/kernel';
 import type { BootResult } from '@issheepbox/kernel';
+import {
+  hashDirectoryContent,
+  readExpansionMeta,
+  readPluginVersion,
+  resolveBuiltinAction,
+  writeExpansionMeta,
+} from './builtinPlugins';
 
 /**
- * Electron 主进程入口（TASK-006/011：内核接入 + 生产打包）。
+ * Electron 主进程入口（TASK-006/011：内核接入 + 生产打包；P-004：内置插件刷新策略）。
  *
  * 职责：
  *  1. 创建 BrowserWindow + preload
  *  2. 解析 pluginsDir：开发态用 monorepo packages/；生产态用 userData/plugins
- *  3. 生产态首次启动：把 resources/builtin-plugins/ 下的第一方插件
- *     （shell-default、approval-policy）展开到 userData/plugins/
+ *  3. 生产态展开 resources/builtin-plugins/ 下的第一方插件
+ *     （shell-default、approval-policy）到 userData/plugins/：
+ *     幂等键 = resources 侧目录内容 hash（记录在 userData/plugins/.builtin-meta.json），
+ *     首启全量拷贝；hash 不变跳过；应用升级后包内容 hash 变化即重拷刷新。
+ *     策略细节与覆盖取舍见 builtinPlugins.ts 头注释。
  *  4. 启动内核（kernel.start）：加载 profile、扫描插件、挂载默认壳
  *  5. 启动失败回退：尝试从最新快照恢复；失败则记录并进入安全模式
  *  6. 将内核状态推送到渲染进程；订阅 shell:ui-refresh 即时刷新
@@ -59,31 +69,19 @@ function createWindow(): BrowserWindow {
 }
 
 /**
- * 递归拷贝目录（内置插件展开用）。
- * 已存在且 plugin.json 版本一致则跳过，避免覆盖用户本地修改。
+ * 递归拷贝目录（内置插件展开用）：同名文件覆盖写，不删除 userData 侧多余文件。
+ * 是否需要拷贝由 resolveBuiltinAction 决策（见 builtinPlugins.ts），本函数只执行。
+ * 不清理多余文件是刻意保守的：内核按 manifest entry 加载，userData 侧残留文件不生效；
+ * 如需精确对齐，后续可改为先清空 dest 再拷贝。
  */
-function copyDirIfNewer(src: string, dest: string): void {
+function copyDirectoryRecursive(src: string, dest: string): void {
   if (!fs.existsSync(src)) return;
-  // 版本一致则跳过。
-  if (fs.existsSync(path.join(dest, 'plugin.json'))) {
-    try {
-      const srcPkg = JSON.parse(
-        fs.readFileSync(path.join(src, 'plugin.json'), 'utf8'),
-      ) as { version?: string };
-      const destPkg = JSON.parse(
-        fs.readFileSync(path.join(dest, 'plugin.json'), 'utf8'),
-      ) as { version?: string };
-      if (srcPkg.version && srcPkg.version === destPkg.version) return;
-    } catch {
-      // 读取失败则继续覆盖。
-    }
-  }
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src)) {
     const s = path.join(src, entry);
     const d = path.join(dest, entry);
     if (fs.statSync(s).isDirectory()) {
-      copyDirIfNewer(s, d);
+      copyDirectoryRecursive(s, d);
     } else {
       fs.copyFileSync(s, d);
     }
@@ -93,7 +91,8 @@ function copyDirIfNewer(src: string, dest: string): void {
 /**
  * 解析插件目录。
  *  - 开发态（app.isPackaged === false）：monorepo packages/，loader 自动跳过无 plugin.json 的目录。
- *  - 生产态：userData/plugins；首次启动把 resources/builtin-plugins/ 展开到该目录。
+ *  - 生产态：userData/plugins；把 resources/builtin-plugins/ 的第一方插件按内容 hash
+ *    幂等展开到该目录（首启全量拷贝；同包内重复启动跳过；应用升级后 hash 变化即重拷）。
  */
 function resolvePluginsDir(userDataDir: string): string {
   if (!app.isPackaged) {
@@ -107,13 +106,33 @@ function resolvePluginsDir(userDataDir: string): string {
   // electron-builder 把内置插件打到 resources/builtin-plugins/。
   const builtinDir = path.join(process.resourcesPath, 'builtin-plugins');
   if (fs.existsSync(builtinDir)) {
+    const metaPath = path.join(pluginsDir, '.builtin-meta.json');
+    const meta = readExpansionMeta(metaPath) ?? { appVersion: app.getVersion(), plugins: {} };
     for (const entry of fs.readdirSync(builtinDir)) {
       const src = path.join(builtinDir, entry);
+      if (!fs.statSync(src).isDirectory()) continue;
       const dest = path.join(pluginsDir, entry);
-      if (fs.statSync(src).isDirectory()) {
-        copyDirIfNewer(src, dest);
+
+      const srcContentHash = hashDirectoryContent(src);
+      const decision = resolveBuiltinAction({
+        destPluginExists: fs.existsSync(path.join(dest, 'plugin.json')),
+        srcContentHash,
+        recorded: meta.plugins[entry],
+      });
+
+      if (decision.action === 'copy') {
+        copyDirectoryRecursive(src, dest);
+        console.log(`[is-sheep-box] 内置插件 ${entry} 已展开（原因：${decision.reason}）`);
+      }
+      // hash 计算失败时不写记录（下次启动重试）；成功则更新观测记录。
+      if (srcContentHash) {
+        meta.plugins[entry] = {
+          pluginVersion: readPluginVersion(path.join(src, 'plugin.json')),
+          contentHash: srcContentHash,
+        };
       }
     }
+    writeExpansionMeta(metaPath, meta);
   }
   return pluginsDir;
 }
