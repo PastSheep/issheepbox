@@ -94,6 +94,32 @@ export interface EffectsRegistry {
 }
 
 /**
+ * 宿主文件能力（ctx.files，P-009 新增，闭环规范反馈 F-008）。
+ *
+ * 规范 §9.1 禁止插件直接使用 Node 内置模块（fs/path）；需要读写文件的插件改经
+ * 内核注入的宿主能力。每次调用按「本插件 manifest.id」经 services 注册表查询
+ * 'approval-policy' 服务的 `checkPermission(pluginId, permission)` 校验——ctx 作用域
+ * API 在 createScopedCtx 内自动携带插件身份，调用方无法伪造或绕过（P-007 已论证：
+ * 经 services 注册表的裸 service 方法无法自动归因调用方）。
+ *
+ * 门禁语义与 P-006 enable 门禁一致（fail-safe）：
+ *  - approval-policy 服务未挂载 / checkPermission 未授予 → 抛错拒绝，无静默放行；
+ *  - files:read 每次读前校验，files:write 每次写前校验。
+ */
+export interface FilesCapability {
+  /**
+   * 读取文本文件（UTF-8）。需 `files:read` 授权；未授权或授权服务不可用时抛错。
+   * v1 为同步最小接口；v1 不做路径沙箱/白名单（路径越界责任在调用方）。
+   */
+  readFile(path: string): string;
+  /**
+   * 写入文本文件（UTF-8，覆盖写）。需 `files:write` 授权；未授权或授权服务
+   * 不可用时抛错。v1 仅同步覆盖写最小接口（无追加/流式/路径白名单，留待后续 minor）。
+   */
+  writeFile(path: string, content: string): void;
+}
+
+/**
  * 内核暴露给插件的 ctx API v1。
  *
  * v1 初始接口面（TASK-002 交付）：
@@ -103,6 +129,8 @@ export interface EffectsRegistry {
  *  - services：服务注册与消费
  *  - effects（P-007 增补）：登记任意 cleanup（如第三方 service 返回的 unregister），
  *    与 events/services 同 effect scope，卸载时自动回滚
+ *  - files（P-009 增补）：宿主文件读写能力，每次调用按本插件 id 经 approval-policy
+ *    checkPermission 做授权门禁（files:read / files:write），fail-safe 拒绝
  *
  * 后续 minor 版本只增不破（见 plugin-spec-v1.md 第 12 节）：
  *  - ctx.commands / ctx.panels（TASK-006）
@@ -123,6 +151,8 @@ export interface PluginContext {
   readonly services: ServiceRegistry;
   /** 可逆 effects：登记任意 cleanup，随插件卸载自动逆序回滚（P-007 增补）。 */
   readonly effects: EffectsRegistry;
+  /** 宿主文件能力：读写真实文件，受 files:read / files:write 授权门禁约束（P-009 增补）。 */
+  readonly files: FilesCapability;
 }
 
 /** 插件入口模块：默认导出一个工厂函数。 */

@@ -336,6 +336,7 @@ export default async function main(ctx: PluginContext): Promise<void> {
 | `ctx.events` | 事件总线（发布/订阅） | `on(event, handler): unsubscribe`、`off(event, handler)`、`emit(event, ...args)` | TASK-002 |
 | `ctx.services` | 服务注册表（请求/响应） | `register(name, service)`、`get(name): service`、`has(name): boolean` | TASK-002 |
 | `ctx.effects` | 可逆 effects（登记任意 cleanup） | `add(fn: () => void): void`——与 events/services 同 scope，卸载时自动逆序执行 | P-007 |
+| `ctx.files` | 宿主文件读写能力（受授权门禁约束） | `readFile(path): string`（需 `files:read`）、`writeFile(path, content): void`（需 `files:write`）——每次调用按本插件 id 经 `approval-policy.checkPermission` 门禁，未授权/服务不可用 fail-safe 抛错 | P-009 |
 
 **后续 minor 版本将追加**（不破坏已有插件；截至 TASK-009 均**未交付**，
 修订说明见文末规范反馈 F-002）：
@@ -444,6 +445,9 @@ export default async function main(ctx: PluginContext): Promise<void> {
 > 的 `enable()` **尚未**强制查询授权（`opts.permissions` 为占位，见
 > docs/TASKS.md P-005）；"运行时越权调用被拒绝"由插件自检
 > `approval-policy.checkPermission()` 兜底（见 file-stats 示例插件与 F-007）。
+> **P-009 增补**：凡经宿主能力（`ctx.files.readFile/writeFile`）访问真实资源的，
+> 内核在每次调用时按本插件 id 再做一次 `checkPermission` 门禁（权威闸），未授权/
+> 服务不可用即 fail-safe 抛错——插件自检只是第一道 fail-fast，宿主能力门禁不可绕过。
 
 ### 7.2 权限最佳实践
 
@@ -481,6 +485,14 @@ export default async function main(ctx: PluginContext): Promise<void> {
   - 输出单个或多个 JS 文件（路径与 manifest `entry` 一致）。
   - 静态资源（HTML、CSS、图片）一并输出到 `dist/assets/`。
   - 不允许打包 Node.js 内置模块（`fs`、`path` 等）——插件运行在 webview 沙箱中。
+
+> **v1 宿主 files 能力（P-009，闭环规范反馈 F-008）**：插件不得直接用 `fs`/`path`；
+> 需要读写文件时改经内核注入的 `ctx.files.readFile(path)`（`files:read`）/
+> `ctx.files.writeFile(path, content)`（`files:write`）。每次调用按本插件
+> `manifest.id` 经 `approval-policy.checkPermission(pluginId, permission)` 做运行时
+> 门禁（ctx 作用域 API 自动携带插件身份，不可绕过）；未授权或授权服务不可用时
+> fail-safe 抛错，无静默放行。v1 为同步最小接口，不做路径沙箱/白名单（路径越界
+> 责任在调用方）；追加/流式/白名单留待后续 minor。官方示例见 `packages/plugins/file-stats`。
 
 ### 9.2 打包
 
@@ -721,10 +733,11 @@ org.example.note-1.0.0.zip
 | F-005 | §5.1 生命周期 | `start` / `stop` 阶段未实现（LifecycleManager 仅 load→mount→unmount；`PluginState` 只出现 mounted/unmounted） | 已修订：标注 start/stop 为设计目标；建议后续 minor 暴露生命周期钩子时补语义 |
 | F-006 | §5.2 / §6.2 / shell:ui seam | `shell:ui.registerPanel` 仅向壳内数组 push，无 unregister、不参与内核 effect scope → 插件卸载后面板记录残留，与「卸载无残留」契约不符 | 已修订：文档标注 v1 边界；登记 **P-006**（编号顺延后为 P-007）：建议 shell:ui 的 registerPanel 返回 unregister 或由内核/壳做 effect 包装。**已闭环（P-007）**：registerPanel 返回 unregister、内核新增 `ctx.effects.add(fn)`（与 events/services 同 scope），注册方（note）登记后卸载自动回滚面板记录；§4.2/§5.2/§11.3 契约已同步 |
 | F-007 | §7.1 权限工作流 | ProfileEngine.enable 未强制查询授权（`opts.permissions` 为占位 void），“拒绝后不可启用”依赖宿主流程先经 approval-policy 请求授权 | 已修订：文档标注 v1 集成点（宿主门禁 + 插件运行时自检）；登记 **P-005**：建议 ProfileEngine 接入 PermissionStore/approval-policy |
-| F-008 | §9.1 / files:read | 规范禁止插件使用 node:fs，但 v1 无宿主 `files` 能力服务，`files:read` 插件无实际文件读取通道（file-stats 采用“宿主经服务/事件传入文本内容”沙箱模式） | 登记 **P-008**：建议提供受 approval-policy 约束的宿主 files capability service |
+| F-008 | §9.1 / files:read | 规范禁止插件使用 node:fs，但 v1 无宿主 `files` 能力服务，`files:read` 插件无实际文件读取通道（file-stats 采用“宿主经服务/事件传入文本内容”沙箱模式） | 登记 **P-008**：建议提供受 approval-policy 约束的宿主 files capability service。**已闭环（P-009）**：内核新增 `ctx.files.readFile/writeFile` 作用域能力（createScopedCtx 闭包捕获本插件 manifest.id，每次调用经 services 注册表查 'approval-policy'.checkPermission 做运行时门禁，fail-safe 拒绝）；file-stats 改为经 `ctx.files` 读真实文件（`statsOfFile`，纯文本统计保留为插件内纯函数）；§4.2/§9.1 已同步 |
 | F-009 | §3.3 示例 manifest | `permissions` 含 `storage:plugin`，与「默认授予、无需声明」表述有张力（无害） | 建议后续示例注明 `storage:plugin` 可省略 |
 | F-010 | §4.2 `ctx.apiVersion` | 内核注入值为 `'1.0'`（lifecycle `createScopedCtx`），而 `CURRENT_API_VERSION='1.0.0'`；插件读取到非完整 SemVer | 登记 **P-007**：建议内核注入 `CURRENT_API_VERSION` 全值 |
 
-**验证基线**：`packages/plugins/verify-examples.cjs` 驱动真实内核，47 项断言 × 5 场景
+**验证基线**：`packages/plugins/verify-examples.cjs` 驱动真实内核，49 项断言 × 5 场景
 全部通过（加载 / enable / 使用 / unmount 无残留 / 权限拒绝路径 / 授权路径 /
-FailSafe 默认拒绝 / 运行时 fail-safe）；`pnpm typecheck`、`pnpm lint` 均 exit 0。
+FailSafe 默认拒绝 / 运行时 fail-safe，含 P-009 宿主 files 能力门禁）；
+`pnpm typecheck`、`pnpm lint` 均 exit 0。

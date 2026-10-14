@@ -16,13 +16,19 @@
  * 覆盖（对齐 TASK-009 验收标准）：
  *   场景 A  内核加载 + enable + 正常使用 + unmount 无残留（无权限形态 + 服务形态）
  *   场景 B  权限拒绝路径：注入 deny prompter → 授权被拒 → 插件不可启用（含事件广播）
- *   场景 C  权限授权路径：注入 grant-all prompter → 授权通过 → 插件启用并工作 → 卸载无残留
+ *   场景 C  权限授权路径：注入 grant-all prompter → 授权通过 → 插件启用并工作
+ *           （file-stats 经宿主 ctx.files.readFile 读真实临时文件并统计正确）→ 卸载无残留
  *   场景 D  FailSafePrompter 默认拒绝（未注入 prompter）
- *   场景 E  运行时 fail-safe：未授权强制挂载 → 插件自检拒绝暴露能力
+ *   场景 E  运行时 fail-safe：未授权强制挂载 → 插件自检拒绝暴露能力；
+ *           宿主 files 能力门禁：approval-policy 未挂载 / 探针未授权时读文件均被拒
  *
  * 历史 seam 缺口（规范反馈 F-006，原登记 P-006，编号顺延后为 docs/TASKS.md P-007）
  * 已闭环：shell:ui.registerPanel 返回 unregister，注册方经 ctx.effects.add 登记进
  * 自身 effect scope，插件卸载后面板记录随 scope dispose 自动回滚（场景 A 断言无残留）。
+ *
+ * P-009（闭环规范反馈 F-008）：file-stats 不再走「宿主传入文本」沙箱模式，改为经宿主
+ * ctx.files.readFile 读真实文件；场景 C 由 statsOfText 改为 statsOfFile，场景 E 补充
+ * 宿主 files 能力运行时门禁（服务不可用 / 未授权均拒绝读文件）断言。
  */
 'use strict';
 
@@ -308,23 +314,32 @@ async function scenarioPermissionGrant(pluginsDir, userDataDir) {
   );
   ok(policy.checkPermission(FILE_STATS_ID, 'files:read') === true, '运行时 checkPermission=true');
 
-  // 正常使用：file-stats 服务
+  // 正常使用：file-stats 服务（P-009：经宿主 ctx.files 读真实临时文件后统计）
+  const samplesDir = path.join(userDataDir, 'samples');
+  fs.mkdirSync(samplesDir, { recursive: true });
+  const asciiFile = path.join(samplesDir, 'ascii.txt');
+  fs.writeFileSync(asciiFile, 'a\nbb\nccc', 'utf8');
+  const utf8File = path.join(samplesDir, 'utf8.txt');
+  fs.writeFileSync(utf8File, '你好\nworld', 'utf8');
+  const emptyFile = path.join(samplesDir, 'empty.txt');
+  fs.writeFileSync(emptyFile, '', 'utf8');
+
   const stats = kernel.services.get('file-stats');
-  ok(typeof stats.statsOfText === 'function', 'file-stats 服务已注册可用');
+  ok(typeof stats.statsOfFile === 'function', 'file-stats 服务已注册可用（statsOfFile）');
   ok(
-    JSON.stringify(stats.statsOfText('a\nbb\nccc')) ===
+    JSON.stringify(stats.statsOfFile(asciiFile)) ===
       JSON.stringify({ lines: 3, words: 3, chars: 8, bytes: 8 }),
-    'statsOfText 纯 ASCII 文本统计正确',
+    'statsOfFile 读取真实 ASCII 文件统计正确（经宿主 ctx.files.readFile）',
   );
   ok(
-    JSON.stringify(stats.statsOfText('你好\nworld')) ===
+    JSON.stringify(stats.statsOfFile(utf8File)) ===
       JSON.stringify({ lines: 2, words: 2, chars: 8, bytes: 12 }),
-    'statsOfText 中文文本统计正确（chars 按码点、bytes 按 UTF-8）',
+    'statsOfFile 读取真实中文文件统计正确（chars 按码点、bytes 按 UTF-8）',
   );
   ok(
-    JSON.stringify(stats.statsOfText('')) ===
+    JSON.stringify(stats.statsOfFile(emptyFile)) ===
       JSON.stringify({ lines: 0, words: 0, chars: 0, bytes: 0 }),
-    'statsOfText 空文本统计正确',
+    'statsOfFile 读取真实空文件统计正确',
   );
 
   // unmount 无残留：服务注销
@@ -368,7 +383,7 @@ async function scenarioFailSafeDefault(pluginsDir, userDataDir) {
 // ---------------------------------------------------------------------------
 
 async function scenarioRuntimeFailSafe(pluginsDir, userDataDir) {
-  console.log('\n[场景 E] 运行时 fail-safe：未授权强制挂载时插件自检拒绝暴露能力');
+  console.log('\n[场景 E] 运行时 fail-safe：未授权/门禁不可用时不暴露能力、读文件被拒');
 
   const kernel = new IsSheepBoxKernel();
   const { discovered } = await kernel.start(userDataDir, pluginsDir);
@@ -379,7 +394,66 @@ async function scenarioRuntimeFailSafe(pluginsDir, userDataDir) {
   ok(outcome.ok === true, '强制挂载本身不抛错（失败隔离语义）');
   ok(
     !kernel.services.has('file-stats'),
-    '未授权时插件内部权限自检拒绝注册 file-stats 服务（fail-safe）',
+    '未授权时插件挂载自检（第一道闸）拒绝注册 file-stats 服务（fail-safe）',
+  );
+
+  // P-009：宿主 files 能力的运行时门禁（第二道/权威闸）——即便插件被强制挂载，
+  // 经 ctx.files.readFile 读真实文件也会被内核按本插件 id 门禁拒绝。
+  const probeFile = path.join(userDataDir, 'probe.txt');
+  fs.writeFileSync(probeFile, 'secret', 'utf8');
+
+  // 阶段 1：approval-policy 服务未挂载 → 宿主能力 fail-safe 拒绝（无静默放行）
+  const probeErrorsNoService = [];
+  await kernel.lifecycle.mount({
+    dir: path.join('virtual', 'probe-files-no-gate'),
+    manifest: {
+      id: 'org.example.probe.files-no-gate',
+      name: 'files 探针（无授权服务）',
+      version: '1.0.0',
+      apiVersion: '^1.0.0',
+      entry: 'index.js',
+    },
+    module: {
+      default: (ctx) => {
+        try {
+          ctx.files.readFile(probeFile);
+        } catch (e) {
+          probeErrorsNoService.push(e.message);
+        }
+      },
+    },
+  });
+  ok(
+    probeErrorsNoService.length === 1 && /approval-policy/.test(probeErrorsNoService[0]),
+    'approval-policy 未挂载时 ctx.files.readFile 被 fail-safe 拒绝（服务不可用）',
+  );
+
+  // 阶段 2：挂载 approval-policy（FailSafePrompter，不对该探针授予 files:read）
+  const mounted = await kernel.lifecycle.mount(makeInjectedApprovalPolicy({}));
+  ok(mounted.ok === true, '挂载 approval-policy（FailSafePrompter，不授予探针权限）');
+  const probeErrorsDenied = [];
+  await kernel.lifecycle.mount({
+    dir: path.join('virtual', 'probe-files-denied'),
+    manifest: {
+      id: 'org.example.probe.files-denied',
+      name: 'files 探针（未授权）',
+      version: '1.0.0',
+      apiVersion: '^1.0.0',
+      entry: 'index.js',
+    },
+    module: {
+      default: (ctx) => {
+        try {
+          ctx.files.readFile(probeFile);
+        } catch (e) {
+          probeErrorsDenied.push(e.message);
+        }
+      },
+    },
+  });
+  ok(
+    probeErrorsDenied.length === 1 && /files:read/.test(probeErrorsDenied[0]),
+    'approval-policy 已挂载但探针未获 files:read 授权时，ctx.files.readFile 被拒',
   );
 
   await kernel.lifecycle.unmount(FILE_STATS_ID);
