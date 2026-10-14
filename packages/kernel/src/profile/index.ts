@@ -181,6 +181,10 @@ export class ProfileEngine {
    *  - 带权限插件 → 经 'approval-policy' 服务 requestApprovalForManifest 判定；
    *  - granted 才加入 enabled 并 mount；denied → 直接返回，不进 enabled、
    *    不持久化、不 mount、不触发快照。
+   *
+   * TASK-013 补充：带权限插件门禁前若授权服务缺失而 approval-policy 已被发现，
+   * 先以基础设施语义自动挂载（ensureApprovalPolicyServiceReady，不写入 enabled），
+   * 否则市场安装主路径下权限清单弹不出来；未发现时维持 fail-safe 拒绝。
    */
   async enable(pluginId: string): Promise<void> {
     if (this.current.enabled.includes(pluginId)) return;
@@ -189,6 +193,12 @@ export class ProfileEngine {
     // P-006 授权门禁（仅对已发现、可读到 manifest 的插件生效；未知 pluginId 维持
     // 旧行为：仅登记进 enabled，不 mount）。
     if (loaded) {
+      // TASK-013 补充：带权限插件门禁前先确保授权服务就绪——市场安装主路径下全新
+      // profile 仅 shell-default 在 enabled，approval-policy 未挂载，不先自动挂载的话
+      // P-006 会 fail-safe 直接拒绝，权限清单永远弹不出来。
+      if ((loaded.manifest.permissions ?? []).length > 0) {
+        await this.ensureApprovalPolicyServiceReady();
+      }
       const decision = await this.requestApprovalIfNeeded(loaded.manifest);
       if (decision.status === 'denied') {
         return;
@@ -204,6 +214,23 @@ export class ProfileEngine {
 
     if (loaded) {
       await this.lifecycle.mount(loaded);
+    }
+  }
+
+  /**
+   * TASK-013：授权服务就绪前置（基础设施语义）。
+   *
+   * 'approval-policy' 服务未挂载而已发现 APPROVAL_POLICY_PLUGIN_ID 时，先把它挂载
+   * （不写入 profile.enabled——用户可见的 enabled 列表保持自描述）。enable() 显式
+   * 启用带权限插件、boot/restore/switchTo 挂载带权限插件时共用此前置：
+   *  - 授权服务已在场（含宿主/测试注入的实例）→ 直接复用，不重复挂载；
+   *  - 未注入 services / approval-policy 未被发现 → 跳过，调用方门禁按 fail-safe 拒绝。
+   */
+  private async ensureApprovalPolicyServiceReady(): Promise<void> {
+    if (!this.services || this.services.has(APPROVAL_SERVICE_NAME)) return;
+    const infra = this.available.get(APPROVAL_POLICY_PLUGIN_ID);
+    if (infra) {
+      await this.lifecycle.mount(infra);
     }
   }
 
@@ -259,20 +286,13 @@ export class ProfileEngine {
     allowed: LoadedPlugin[];
     gateFailures: Array<{ pluginId: string; error: Error }>;
   }> {
+    // 前置：enabled 中存在带权限插件而授权服务未挂载时，先按基础设施语义挂载
+    // approval-policy（不写入 enabled）；挂载失败则服务仍缺失，下方门禁按 fail-safe 拒绝。
     const hasPermissionPlugin = plugins.some(
       (p) => (p.manifest.permissions ?? []).length > 0,
     );
-    if (
-      hasPermissionPlugin &&
-      this.services &&
-      !this.services.has(APPROVAL_SERVICE_NAME)
-    ) {
-      // 基础设施语义：授权服务是带权限插件的前置依赖，未在 enabled 时也先挂载；
-      // 挂载失败则服务仍缺失，下方门禁按 fail-safe 拒绝。
-      const infra = this.available.get(APPROVAL_POLICY_PLUGIN_ID);
-      if (infra) {
-        await this.lifecycle.mount(infra);
-      }
+    if (hasPermissionPlugin) {
+      await this.ensureApprovalPolicyServiceReady();
     }
 
     const allowed: LoadedPlugin[] = [];
