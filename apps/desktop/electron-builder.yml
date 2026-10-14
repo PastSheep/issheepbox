@@ -9,9 +9,6 @@ directories:
   output: ../../release
   buildResources: build
 
-# 应用入口（相对 apps/desktop）
-main: dist/main.js
-
 # 打包内容：
 #  - apps/desktop/dist（主进程 + preload 编译产物）
 #  - apps/desktop/index.html（渲染进程入口）
