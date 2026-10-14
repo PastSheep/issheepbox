@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-theme-service",
+  "version": "1.0.0",
+  "description": "TASK-009 官方示例插件：带服务形态（theme 服务 + theme:changed 事件）",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}

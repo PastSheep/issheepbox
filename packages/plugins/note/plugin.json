@@ -1,0 +1,28 @@
+{
+  "id": "org.issheepbox.example.note",
+  "name": "便签",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "TASK-009 官方示例插件：纯 UI 面板形态（无权限），经 shell:ui seam 注册面板、经 events/services 与其他插件协作",
+  "author": "Is Sheep Box",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "ui": {
+    "toolbox": {
+      "label": "便签",
+      "defaultOpen": "panel"
+    },
+    "panels": [
+      {
+        "id": "note-main",
+        "title": "我的便签",
+        "src": "assets/panel.html",
+        "width": 360,
+        "height": 240
+      }
+    ]
+  },
+  "permissions": [],
+  "requires": {},
+  "contributes": {}
+}

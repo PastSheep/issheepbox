@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-file-stats",
+  "version": "1.0.0",
+  "description": "TASK-009 官方示例插件：带权限形态（文件文本统计，需 files:read）",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>我的便签</title>
+<style>
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  textarea {
+    width: 100%; height: 100vh; border: none; outline: none;
+    padding: 12px; box-sizing: border-box; font-size: 14px; line-height: 1.6;
+    background: #fff8dc; resize: none;
+  }
+</style>
+</head>
+<body>
+  <textarea id="note" placeholder="写点什么..."></textarea>
+  <script>
+    // 面板模板（规范 §11.4 模型）：面板运行于隔离 webview，通过 ctx 子集与主上下文通信。
+    // v1 边界：shell:ui 面板 seam 目前仅记录面板清单（registerPanel），
+    // 尚未实现 webview 挂载；此 HTML 随插件包交付，待壳接入后由宿主加载。
+    const ta = document.getElementById('note');
+    if (typeof ctx === 'undefined' || !ctx.events) {
+      // 无 ctx 子集（如直接在浏览器打开预览）时仅保留本地编辑能力。
+      ta.addEventListener('input', () => {
+        localStorage.setItem('note:content', ta.value);
+      });
+      ta.value = localStorage.getItem('note:content') || '';
+      return;
+    }
+
+    // 接收主上下文发来的渲染事件
+    ctx.events.on('note:render', (payload) => {
+      if (payload && typeof payload.content === 'string') {
+        ta.value = payload.content;
+      }
+    });
+
+    // 输入时通知主上下文保存（防抖 500ms）
+    let timer;
+    ta.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        ctx.events.emit('note:content-updated', ta.value);
+      }, 500);
+    });
+  </script>
+</body>
+</html>
