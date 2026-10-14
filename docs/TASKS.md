@@ -200,13 +200,19 @@
 - 完成时间：
 
 ### TASK-015：授权持久化（ApprovalStore 磁盘实现）
-- 状态：待派发
+- 状态：已完成
 - 负责 agent：agent-approval-store
 - 分支：agent-approval-store/feat-approval-store
 - 需求描述：approval-policy 落地持久化：① DiskApprovalStore（userData 下 approvals.json，原子写=临时文件+rename；set/delete 即落盘；构造时加载既有记录）；② createApprovalPolicyPlugin 默认接线：store=宿主服务 host:user-data（C3）存在则 DiskApprovalStore(dir) 否则 MemoryApprovalStore；prompter=服务 approval-ui（C1）存在则用之否则 FailSafePrompter；③ requestApproval 按 source 区分：source ∈ {boot, restore, switchTo} 为启动路径——仅查存储：granted 记录→自动 granted、denied/无记录→denied（不弹窗，fail-safe）；其余来源维持现行为（granted 覆盖自动复用、denied 记录复用不重复弹窗、需授权则经 prompter）。
 - 验收标准：重启后授权记录保留（磁盘 roundtrip：新实例读同一文件）；原子写（中断不产生半写文件——临时文件+rename 机制验证）；approval-policy 32 基线 + 新增持久化/来源语义用例；kernel 63、verify-examples 49×5 回归全绿。
 - 依赖：TASK-008（P-006）
-- 完成时间：
+- 完成时间：2026-10-15
+- **合并记录（merger）**：2026-10-15 审查通过并合并（merge `279ec79`，分支 tip `2627db4`，基于 f4bbda8；main 已前进至 33be1ee 且增量仅 docs 提交，改动零重叠，无冲突直接并入），远端分支 `agent-approval-store/feat-approval-store` 已删除。
+  - 审查结论：4 提交信息符合 conventions（3×feat(approval-policy) / 1×docs(approval-policy)，正文均写明改了什么/为什么/影响范围）；diff 范围 7 文件 +830/-24，全部位于 packages/approval-policy（新增 src/storage-disk.ts、wiring.test.ts、storage-disk.test.ts；index.ts 默认接线；approval-policy.ts 启动路径 source 语义 +6 例；README），无 kernel/shell-default/market-client/desktop/plugins 夹带；无密钥/本机路径；无 dist/node_modules/lockfile/二进制入库。
+  - 语义核对：C3 原子写——临时文件（pid+时间戳+序号唯一）同目录写出后 rename 覆盖，且 set/delete 先 flushMap 落盘成功再更新内存，落盘抛错不破坏既有 approvals.json ✓；C3 默认接线——host:user-data 形状合法→DiskApprovalStore(dir)，形状非法 warn 回退 Memory，显式 options.store 优先 ✓；C1——prompter 为懒解析代理，每次弹窗前现查 approval-ui（形状校验），缺失/非法→FailSafePrompter，不缓存、不依赖挂载顺序，显式 options.prompter 优先 ✓；C2——BOOT_PATH_SOURCES={boot,restore,switchTo} 走仅查存储分支：granted 覆盖自动复用、denied 记录复用、无记录/未覆盖→denied(fail-safe) 且绝不 store.set、空权限直通 granted(auto)；其余来源行为不变 ✓。
+  - 冲突处理：无。分支基于 f4bbda8，main 增量（8facbe8/a488d33/33be1ee）均为 docs/TASKS.md 提交，与本分支改动文件零重叠。
+  - 合并后复跑验证：`pnpm install` exit 0（already up to date，无需 --ignore-scripts）；`pnpm run typecheck` exit 0；`pnpm run lint` exit 0；`pnpm --filter @issheepbox/approval-policy test` 51/51 通过（5 个测试文件：32 基线零修订 + 19 新增=storage-disk 9 / wiring 4 / boot-path 6）；`pnpm --filter @issheepbox/kernel test` 63/63 通过；`node packages/plugins/verify-examples.cjs` 49 断言 × 5 场景全部通过；`pnpm --filter @issheepbox/market-client run verify:fixture` 46/46 通过；`pnpm --filter @issheepbox/desktop run build` exit 0。
+  - 设计决定要点：①原子写「先落盘后更新内存」——落盘失败时内存与磁盘同停旧态，调用方可安全重试，无「内存新、磁盘旧」分叉；②启动路径「无记录不写策略」——绝不 store.set，避免把用户尚未决策的插件永久锁死在 denied；③prompter 懒解析——不缓存服务实例，壳后于本插件挂载时，下一次弹窗即自动用上 approval-ui；④损坏 approvals.json 容错降级为空存储 + logger.warn，不抛错不阻塞启动（宁可重新授权也不让应用起不来）；⑤v1 多实例同写不做文件锁（桌面单进程模型足够），局限已在 README 标注。
 
 ---
 
