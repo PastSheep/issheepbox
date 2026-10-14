@@ -180,7 +180,7 @@
 - 完成时间：
 
 ### TASK-013：授权 UI（shell-default ApprovalPrompter）+ 启动路径门禁修复（kernel）
-- 状态：待派发
+- 状态：已完成
 - 负责 agent：agent-authz-ui
 - 分支：agent-authz-ui/feat-authz-ui
 - 需求描述：
@@ -188,7 +188,15 @@
   ② kernel ProfileEngine 启动恢复路径门禁修复（真实问题：file-stats 未授权即被启用，P-006 门禁只拦显式 enable）：boot()/restore()/switchTo() 挂载 enabled 插件前，对声明权限的插件同样 requestApprovalForManifest(manifest, source='boot'/'restore'/'switchTo')——未授权（denied 或无记录）不挂载并记录（mountFailures 或等价可观测位置），profile.enabled 保持不动（用户后续可授权后重启用）；boot 时需保证 approval-policy 服务先就绪（enabled 含带权限插件且服务未挂载时先挂载 approval-policy 或等价机制）；enable() 显式门禁保持现状。内核改动仅限此门禁修复处。
 - 验收标准：无权限插件启动直通；带权限插件无授权记录/denied 时启动不挂载（启动恢复路径复测）；shell 挂载后 approval-ui 服务可被 approval-policy 消费；kernel 63 基线 + 新增启动门禁用例、approval-policy 32、verify-examples 49×5 回归全绿；typecheck/lint exit 0。
 - 依赖：TASK-006、TASK-008（P-006）
-- 完成时间：
+- 完成时间：2026-10-15
+- 合并记录（merger）：
+  - 合并提交：dbc4bcf（merge --no-ff，基于 721ad87；分支 tip 0f91049，5 提交）。
+  - 审查结论：5 提交信息符合 conventions（2×fix(kernel)/1×feat(shell-default)/2×test(kernel)，正文均写明改了什么/为什么改/影响范围）；diff 范围 4 文件 +627/-10，全部位于 packages/kernel（profile/index.ts、新增 __tests__/boot-gate.test.ts）与 packages/shell-default（src/index.ts、plugin.json），无 approval-policy/market-client/desktop/plugins 夹带；无密钥/本机路径；无 dist/node_modules/lockfile/二进制入库。
+  - 语义核对：C2——boot()/restore()/switchTo() 挂载 profile.enabled 前经 gateEnabledPlugins() 对带权限插件 requestApprovalForManifest(manifest, source)（source='boot'/'restore'/'switchTo'，与 015 的 BOOT_PATH_SOURCES 集合逐字一致），denied/无记录/服务不可用 → 不挂载并记入 mountFailures（boot）/getLastMountFailures()（restore/switchTo），profile.enabled 不被静默改写 ✓；enable() 门禁其余语义不变（denied 不进 enabled、无权限直通、granted 挂载）✓；infra 自动挂载——ensureApprovalPolicyServiceReady() 仅在 enabled/待启用列表含带权限插件且 'approval-policy' 服务缺席、且 org.issheepbox.approval-policy 已被发现时挂载，不写入 profile.enabled；服务已在场（含宿主/测试注入）直接复用不重复挂载；未发现则 fail-safe 拒绝 ✓。C1——shell-default 注册 approval-ui 服务（形状=ApprovalPrompter 的本地结构类型，不运行时依赖 approval-policy），发 approval:ui-request（载荷 { token, pluginId, pluginName, permissions: PermissionInfo[] 原样透传 }）→ 按 token 等 approval:ui-response（{ token, result }）→ 返回 grant-all/grant-subset/deny；120s 超时 fail-safe 拒绝；壳卸载经 ctx.effects 兜底拒绝在途请求并清理定时器（P-007 可逆）；过期/伪造 token 响应直接忽略不串扰 ✓。
+  - 冲突处理：无。分支基于 f4bbda8，main 增量（TASK-015 合并 + docs 提交）均为 approval-policy/docs 改动，与本分支文件零重叠，ort 策略自动合并。
+  - 合并后复跑验证：`pnpm install` exit 0（already up to date）；`pnpm run typecheck` exit 0；`pnpm run lint` exit 0；`pnpm --filter @issheepbox/kernel test` 72/72 通过（63 基线 + boot-gate.test.ts 9 新增）；`pnpm --filter @issheepbox/approval-policy test` 51/51 通过；`node packages/plugins/verify-examples.cjs` 49 断言 × 5 场景全部通过（node 真实退出码 0；场景 D 因 shell-default 注册 approval-ui 后经事件往返等 120s 超时 deny，断言仍全绿）；`pnpm --filter @issheepbox/market-client run verify:fixture` 46/46 通过；`pnpm --filter @issheepbox/desktop run build` exit 0。
+  - 设计偏离登记：默认 profile.enabled 仍为 [shell-default]，不持久化 approval-policy——approval-policy 仅按基础设施语义在门禁需要时由 kernel 按需 ensureApprovalPolicyServiceReady 挂载。硬约束理由（merger 复核 verify-examples.cjs 成立）：场景 B/C/D/E 均在 kernel.start() 后自行 lifecycle.mount(makeInjectedApprovalPolicy(...)) 注入自定义 prompter/store 的 approval-policy；若默认 enabled 持久化 approval-policy，boot 会先挂载它并注册同名服务，脚本再注入时撞 ServiceRegistry 同名注册致 49×5 变红；且场景 E 阶段 1 依赖「approval-policy 服务未挂载」验证 fail-safe，默认持久化会直接破坏该断言。packages/plugins 禁改，此偏离为唯一可行接线，结论合理。
+  - infra 自动挂载语义与 approval-ui 事件契约已在上方「语义核对」登记；approval-ui 事件桥接渲染进程权限清单对话框由 TASK-012 desktop 承接。
 
 ### TASK-014：面板渲染（shell:ui 面板挂载区）
 - 状态：待派发
