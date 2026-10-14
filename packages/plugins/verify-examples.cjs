@@ -20,9 +20,9 @@
  *   场景 D  FailSafePrompter 默认拒绝（未注入 prompter）
  *   场景 E  运行时 fail-safe：未授权强制挂载 → 插件自检拒绝暴露能力
  *
- * 已知 seam 缺口（见 docs/plugin-spec-v1.md 规范反馈 F-006 / docs/TASKS.md P-006）：
- *   shell:ui.registerPanel 仅向壳内数组记录面板，不参与内核 effect scope，
- *   插件卸载后面板记录不自动回滚（脚本按当前行为断言并标注，不当作失败）。
+ * 历史 seam 缺口（规范反馈 F-006，原登记 P-006，编号顺延后为 docs/TASKS.md P-007）
+ * 已闭环：shell:ui.registerPanel 返回 unregister，注册方经 ctx.effects.add 登记进
+ * 自身 effect scope，插件卸载后面板记录随 scope dispose 自动回滚（场景 A 断言无残留）。
  */
 'use strict';
 
@@ -211,10 +211,10 @@ async function scenarioDefaultShellIntegration(pluginsDir, userDataDir) {
   kernel.events.emit('note:new');
   ok(created.length === 1, 'note 卸载后不再响应 note:new（事件监听已回滚）');
 
-  // —— seam 缺口标注：shell:ui 面板记录为宿主侧状态，不随插件卸载回滚（P-006）——
+  // —— unmount 无残留：shell:ui 面板记录随插件 effect scope 自动回滚（P-007 闭环 F-006）——
   ok(
-    ui.panels.some((p) => p.id === 'note-main'),
-    '【已知缺口 F-006/P-006】shell:ui 面板记录保留在宿主侧（不视为本场景失败）',
+    !ui.panels.some((p) => p.id === 'note-main'),
+    'note 卸载后 shell:ui 面板记录已随 effect scope 回滚（不残留）',
   );
 
   await kernel.stop();

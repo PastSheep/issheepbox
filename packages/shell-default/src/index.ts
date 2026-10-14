@@ -16,8 +16,14 @@ import type { PluginContext } from '@issheepbox/kernel';
 
 /** shell:ui service seam（供后续插件注册面板入口）。 */
 export interface ShellUiService {
-  /** 注册一个面板入口（占位，TASK-006 仅记录，不实现 UI 挂载）。 */
-  registerPanel: (panelId: string, title: string) => void;
+  /**
+   * 注册一个面板入口（占位，TASK-006 仅记录，不实现 UI 挂载）。
+   *
+   * P-007：返回 unregister 函数——注册方（如 note）应把它登记进自身 ctx.effects，
+   * 插件卸载时随 effect scope 自动回滚面板记录（规范 §5.2「卸载无残留」契约）。
+   * 重复注册同一 panelId 时，每次返回的 unregister 只撤销本次注册产生的条目。
+   */
+  registerPanel: (panelId: string, title: string) => () => void;
   /** 已注册面板列表。 */
   panels: Array<{ id: string; title: string }>;
 }
@@ -34,8 +40,17 @@ export default function shellDefault(ctx: PluginContext): void {
   const uiService: ShellUiService = {
     panels,
     registerPanel(panelId, title) {
-      panels.push({ id: panelId, title });
+      // P-007：面板记录本身是壳的宿主侧状态，内核无法自动跟踪第三方 service 的
+      // 注册动作——因此返回 unregister，由注册方经 ctx.effects.add 挂进自身 scope。
+      const panel = { id: panelId, title };
+      panels.push(panel);
       ctx.events.emit('shell:ui-refresh', { reason: 'panel-registered', panelId });
+      return () => {
+        // 按对象引用精确移除本次注册的条目（容忍重复 panelId），并触发刷新。
+        const idx = panels.indexOf(panel);
+        if (idx !== -1) panels.splice(idx, 1);
+        ctx.events.emit('shell:ui-refresh', { reason: 'panel-unregistered', panelId });
+      };
     },
   };
   ctx.services.register('shell:ui', uiService);
