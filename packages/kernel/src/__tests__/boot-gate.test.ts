@@ -323,4 +323,44 @@ describe('ProfileEngine 启动/恢复/切换路径门禁（TASK-013）', () => {
 
     await h.lifecycle.unmountAll();
   });
+
+  it('⑧ enable：带权限插件时授权服务缺失但 approval-policy 可发现 → 先自动挂载基础设施再门禁（不写入 enabled）', async () => {
+    const h = setup();
+    seedProfile(h, 'default', [DEFAULT_SHELL_ID]);
+    // registry 中无 'approval-policy' 服务；available 中可发现 approval-policy
+    const gateway = new FakeGateway(granted());
+    const infra: LoadedPlugin = {
+      dir: `/virtual/${APPROVAL_POLICY_PLUGIN_ID}`,
+      manifest: makeManifest(APPROVAL_POLICY_PLUGIN_ID),
+      module: {
+        default: (ctx) => {
+          ctx.services.register(APPROVAL_SERVICE_NAME, gateway);
+        },
+      },
+    };
+    const engine = makeEngine(h);
+    engine.setAvailablePlugins([
+      makeLoaded(DEFAULT_SHELL_ID),
+      makeLoaded(PERM_PLUGIN_ID, ['files:read']),
+      infra,
+    ]);
+    await engine.boot();
+    // 全新 profile（enabled 仅 shell）启动：无带权限插件，基础设施未被自动挂载
+    expect(h.registry.has(APPROVAL_SERVICE_NAME)).toBe(false);
+
+    // 市场安装主路径：会话内 enable 带权限插件
+    await engine.enable(PERM_PLUGIN_ID);
+
+    // 基础设施已自动挂载（门禁前置）
+    expect(h.lifecycle.mountedIds).toContain(APPROVAL_POLICY_PLUGIN_ID);
+    // 但不写入 profile.enabled（自描述）
+    expect(engine.getCurrent().enabled).not.toContain(APPROVAL_POLICY_PLUGIN_ID);
+    // 门禁正常执行（source=enable），granted → 插件进 enabled 并挂载
+    expect(gateway.calls).toHaveLength(1);
+    expect(gateway.calls[0].source).toBe('enable');
+    expect(h.lifecycle.mountedIds).toContain(PERM_PLUGIN_ID);
+    expect(engine.getCurrent().enabled).toContain(PERM_PLUGIN_ID);
+
+    await h.lifecycle.unmountAll();
+  });
 });
