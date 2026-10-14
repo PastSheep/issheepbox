@@ -30,6 +30,13 @@ import {
 /** 默认壳插件 ID（TASK-006 实现真实 UI，这里是 fallback 占位）。 */
 export const DEFAULT_SHELL_ID = 'org.issheepbox.shell-default';
 
+/**
+ * approval-policy 第一方基础设施插件 ID（与 packages/approval-policy/plugin.json 对齐）。
+ * TASK-013：启动/恢复/切换路径在授权服务未挂载时，先按基础设施语义挂载它以通过
+ * 带权限插件门禁；挂载结果不写入 profile.enabled（enabled 列表保持自描述）。
+ */
+export const APPROVAL_POLICY_PLUGIN_ID = 'org.issheepbox.approval-policy';
+
 function now(): number {
   return Date.now();
 }
@@ -64,6 +71,12 @@ export class ProfileEngine {
   private current: Profile;
   /** 已发现的插件查找表（pluginId → LoadedPlugin）。 */
   private available = new Map<string, LoadedPlugin>();
+  /**
+   * 最近一次 boot()/restore()/switchTo() 的挂载失败（mountAll 失败 + 启动路径门禁拒绝）。
+   * TASK-013：boot() 结果另经 BootResult.mountFailures 暴露给 UI；restore()/switchTo()
+   * 无返回通道，经此 getter 供观测/测试。
+   */
+  private lastMountFailures: Array<{ pluginId: string; error: Error }> = [];
 
   constructor(opts: {
     userDataDir: string;
@@ -94,6 +107,11 @@ export class ProfileEngine {
   /** 当前 profile（只读快照）。 */
   getCurrent(): Profile {
     return { ...this.current };
+  }
+
+  /** 最近一次 boot()/restore()/switchTo() 的挂载失败（只读快照，TASK-013）。 */
+  getLastMountFailures(): Array<{ pluginId: string; error: Error }> {
+    return [...this.lastMountFailures];
   }
 
   /** 列出所有 profile 名称。 */
@@ -146,11 +164,13 @@ export class ProfileEngine {
     this.store.writeCurrentName(name);
     this.events.emit('app:profile-changed', { name });
 
-    // 挂载新 profile 启用的插件。
+    // 挂载新 profile 启用的插件（TASK-013：带权限插件先过启动路径门禁）。
     const enabled = this.current.enabled
       .map((id) => this.available.get(id))
       .filter((p): p is LoadedPlugin => Boolean(p));
-    await this.lifecycle.mountAll(enabled);
+    const gated = await this.gateEnabledPlugins(enabled, 'switchTo');
+    const result = await this.lifecycle.mountAll(gated.allowed);
+    this.lastMountFailures = [...result.failures, ...gated.gateFailures];
   }
 
   /**
@@ -195,9 +215,13 @@ export class ProfileEngine {
    *   requestApprovalForManifest 判定（含已有授权复用 / 拒绝记录复用 / 弹窗收集决策）。
    * - 授权服务不可用（未注入 services 或该服务未挂载）→ 带权限插件一律拒绝
    *   （fail-safe，无静默放行；与 TASK-008 FailSafePrompter 语义一致）。
+   *
+   * @param source 授权来源：enable() 显式启用（缺省）；TASK-013 启动恢复路径传
+   *   'boot' / 'restore' / 'switchTo'，由 approval-policy 按来源语义处理（仅查存储）。
    */
   private async requestApprovalIfNeeded(
     manifest: PluginManifest,
+    source: string = 'enable',
   ): Promise<ApprovalDecisionLike> {
     const declared = manifest.permissions ?? [];
     if (declared.length === 0) {
@@ -212,7 +236,66 @@ export class ProfileEngine {
       };
     }
     const gateway = this.services.get<ApprovalGateway>(APPROVAL_SERVICE_NAME);
-    return gateway.requestApprovalForManifest(manifest, 'enable');
+    return gateway.requestApprovalForManifest(manifest, source);
+  }
+
+  /**
+   * TASK-013：启动/恢复/切换路径挂载门禁（契约 C2）。
+   *
+   * 与 enable() 显式门禁同一套判定，但针对「profile.enabled 已持久化、本次启动恢复」：
+   *  - 前置：enabled 中存在带权限插件而 'approval-policy' 服务未挂载时，先把已发现的
+   *    APPROVAL_POLICY_PLUGIN_ID 作为基础设施挂载（不写入 profile.enabled）；未发现则
+   *    带权限插件按 fail-safe 拒绝（与 P-006 一致）。
+   *  - 每个带权限插件先 requestApprovalForManifest(manifest, source)：granted 才放行；
+   *    denied / 无记录 / 服务不可用 → 不挂载，记入 gateFailures（error.message 写明
+   *    「启动恢复路径门禁」与原因），profile.enabled 保持不变（用户可在会话内重新授权
+   *    后 enable，不静默改写 profile）。
+   *  - 无权限插件直通，不查询网关。
+   */
+  private async gateEnabledPlugins(
+    plugins: LoadedPlugin[],
+    source: 'boot' | 'restore' | 'switchTo',
+  ): Promise<{
+    allowed: LoadedPlugin[];
+    gateFailures: Array<{ pluginId: string; error: Error }>;
+  }> {
+    const hasPermissionPlugin = plugins.some(
+      (p) => (p.manifest.permissions ?? []).length > 0,
+    );
+    if (
+      hasPermissionPlugin &&
+      this.services &&
+      !this.services.has(APPROVAL_SERVICE_NAME)
+    ) {
+      // 基础设施语义：授权服务是带权限插件的前置依赖，未在 enabled 时也先挂载；
+      // 挂载失败则服务仍缺失，下方门禁按 fail-safe 拒绝。
+      const infra = this.available.get(APPROVAL_POLICY_PLUGIN_ID);
+      if (infra) {
+        await this.lifecycle.mount(infra);
+      }
+    }
+
+    const allowed: LoadedPlugin[] = [];
+    const gateFailures: Array<{ pluginId: string; error: Error }> = [];
+    for (const plugin of plugins) {
+      if ((plugin.manifest.permissions ?? []).length === 0) {
+        allowed.push(plugin);
+        continue;
+      }
+      const decision = await this.requestApprovalIfNeeded(plugin.manifest, source);
+      if (decision.status === 'granted') {
+        allowed.push(plugin);
+        continue;
+      }
+      gateFailures.push({
+        pluginId: plugin.manifest.id,
+        error: new Error(
+          `启动恢复路径门禁（${source}）：插件 ${plugin.manifest.id} 未授权，本次不挂载。` +
+            `原因：${decision.reason ?? '无授权记录或已被拒绝'}`,
+        ),
+      });
+    }
+    return { allowed, gateFailures };
   }
 
   /**
@@ -256,10 +339,13 @@ export class ProfileEngine {
     this.store.writeCurrentName(this.current.name);
     this.events.emit('app:profile-restored', { snapshotId });
 
+    // TASK-013：恢复路径同样过启动门禁（source='restore'）。
     const enabled = this.current.enabled
       .map((id) => this.available.get(id))
       .filter((p): p is LoadedPlugin => Boolean(p));
-    await this.lifecycle.mountAll(enabled);
+    const gated = await this.gateEnabledPlugins(enabled, 'restore');
+    const result = await this.lifecycle.mountAll(gated.allowed);
+    this.lastMountFailures = [...result.failures, ...gated.gateFailures];
     return this.current;
   }
 
@@ -274,8 +360,13 @@ export class ProfileEngine {
       .map((id) => this.available.get(id))
       .filter((p): p is LoadedPlugin => Boolean(p));
 
-    const result = await this.lifecycle.mountAll(enabledPlugins);
+    // TASK-013：启动路径门禁（契约 C2）——带权限插件先 requestApprovalForManifest
+    // （source='boot'），未授权不挂载并记入 mountFailures；profile.enabled 保持不变。
+    const gated = await this.gateEnabledPlugins(enabledPlugins, 'boot');
+    const result = await this.lifecycle.mountAll(gated.allowed);
     failures.push(...result.failures);
+    failures.push(...gated.gateFailures);
+    this.lastMountFailures = [...failures];
 
     // 壳 fallback：检查 profile.shell 是否成功 mount。
     const shellMounted = this.lifecycle.mountedIds.includes(this.current.shell);
