@@ -4,5 +4,29 @@
   "version": "0.1.0",
   "apiVersion": "^1.0.0",
   "entry": "dist/index.js",
-  "description": "第一方默认宿主壳：提供主界面、插件列表与面板占位 seam。"
+  "description": "第一方默认宿主壳：提供主界面、插件列表与面板占位 seam。",
+  "contributes": {
+    "services": [
+      {
+        "name": "shell:ui",
+        "version": "1.0.0",
+        "description": "面板 seam：registerPanel(panelId, title) 返回 unregister（P-007 可逆），panels 为已注册面板列表"
+      },
+      {
+        "name": "approval-ui",
+        "version": "1.0.0",
+        "description": "授权 UI 桥（契约 C1）：prompt(request) 把权限清单经内核事件 approval:ui-request 转发宿主对话框，等 approval:ui-response 回决策；超时 fail-safe 拒绝。形状 = approval-policy 的 ApprovalPrompter"
+      }
+    ],
+    "events": [
+      {
+        "name": "approval:ui-request",
+        "description": "壳发出授权请求；载荷 { token, pluginId, pluginName, permissions: PermissionInfo[] }，宿主桥按 token 弹窗"
+      },
+      {
+        "name": "approval:ui-response",
+        "description": "宿主桥回授权决策；载荷 { token, result: ApprovalPromptResult }（grant-all / grant-subset / deny）"
+      }
+    ]
+  }
 }
