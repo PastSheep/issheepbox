@@ -195,9 +195,11 @@
 - 说明：`packages/shell-default/src/index.ts` 的 `registerPanel` 仅向内部 `panels` 数组 push，无 unregister、不参与内核 EffectScope；插件卸载后其面板记录不自动回滚，与规范 §5.2「卸载无残留」契约不符（TASK-009 验证脚本已按当前行为断言并标注）。建议：registerPanel 返回 unregister 函数，或由内核/壳对面板注册做 effect 包装；同时可考虑把面板声明来源（manifest ui.panels）纳入壳记录以支持自动回滚。
 
 ### P-008：ctx.apiVersion 注入值非完整 SemVer
-- 状态：待处理
+- 状态：已解决（销项）
 - 来源：TASK-009 规范反馈 F-010（agent-examples）
 - 说明：`packages/kernel/src/lifecycle/index.ts` 的 `createScopedCtx` 注入 `apiVersion: '1.0'`，而 `CURRENT_API_VERSION='1.0.0'`（compat.ts）；插件读取 `ctx.apiVersion` 得到非完整 SemVer。建议内核注入 `CURRENT_API_VERSION` 全值，避免插件侧版本判断歧义。
+- **解决说明**（agent-fix/p008-apiversion，提交 f1a7f9e）：createScopedCtx 注入值由硬编码 '1.0' 改为 compat.ts 导出的 CURRENT_API_VERSION（'1.0.0'），消除插件侧版本判断歧义；新增 lifecycle 单测断言 ctx.apiVersion === '1.0.0'。全仓无其他断言/文档依赖旧注入值（manifest.test.ts 的 '1.0' 为插件 version 非法值用例，无关；verify-examples 无断言依赖；F-010 为审查历史记录保留原样）。
+- **合并记录（merger）**：2026-10-14 审查通过并合并（merge `9476ab0`），远端分支已删除。合并后复跑：typecheck/lint exit 0；kernel 36/36、approval-policy 32/32 测试通过；verify-examples.cjs 47 断言 × 5 场景通过。
 
 ### P-009：files:read 等权限缺少可消费的宿主能力服务
 - 状态：待处理
