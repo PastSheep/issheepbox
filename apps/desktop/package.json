@@ -1,6 +1,6 @@
 {
   "name": "@issheepbox/desktop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Is Sheep Box Electron 宿主入口",
   "private": true,
   "main": "dist/main.js",
