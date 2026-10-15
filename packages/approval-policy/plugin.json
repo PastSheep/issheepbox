@@ -1,7 +1,7 @@
 {
   "id": "org.issheepbox.approval-policy",
   "name": "权限授权",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiVersion": "^1.0.0",
   "description": "第一方基础设施插件：解析插件 manifest.permissions，安装/启用时展示权限清单并请求用户授权（approval policy）",
   "author": "Is Sheep Box",

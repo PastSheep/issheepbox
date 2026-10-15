@@ -1,7 +1,7 @@
 {
   "id": "org.issheepbox.shell-default",
   "name": "Is Sheep Box 默认壳",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "apiVersion": "^1.0.0",
   "entry": "dist/index.js",
   "description": "第一方默认宿主壳：提供主界面、插件列表与面板占位 seam。",
