@@ -246,6 +246,12 @@ void app.whenReady().then(async () => {
   // approval-policy（TASK-015 落地 DiskApprovalStore）挂载时据此选择持久化存储。
   kernel.services.register('host:user-data', { dir: userDataDir });
 
+  // 宿主网络能力 host:net：插件经 ctx.services.get('host:net')?.fetch 取网，
+  // 规避 undici（Node 全局 fetch）在用户本机 Windows 加速器代理下校验代理证书链失败
+  // （UNABLE_TO_VERIFY_LEAF_SIGNATURE）；与 market-client 的 fetchImpl 注入同构，
+  // 均走 Electron net.fetch（Chromium 网络栈，信任系统证书链）。
+  kernel.services.register('host:net', { fetch: net.fetch as typeof fetch });
+
   // 契约 C1 桥：内核事件 approval:ui-request → 转发渲染进程弹权限清单；
   // 渲染进程经 IPC approval:ui-response 回 → 回发内核事件 approval:ui-response。
   // 窗口已销毁时确定性拒绝（deny），不悬挂授权请求。
