@@ -112,6 +112,18 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
 
+  packages/plugins/shushu-data:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  packages/plugins/storage:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
   packages/plugins/theme-service:
     devDependencies:
       '@issheepbox/kernel':

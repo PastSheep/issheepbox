@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-storage",
+  "version": "1.0.0",
+  "description": "第一方基础设施插件：按命名空间隔离的 KV 持久化服务（补齐 ctx.storage 缺口）",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}

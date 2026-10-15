@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-shushu-data",
+  "version": "1.0.0",
+  "description": "跨仓库插件：拉取 DeltaForceBox-Assets manifest 并提供 shushu-data 服务 + 静态面板",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
