@@ -38,3 +38,6 @@ venv/
 # 本地临时
 *.tmp
 temp/
+
+# dev 模式市场安装产物（插件落入开发态 pluginsDir=monorepo packages/，不入库）
+packages/org.issheepbox.*/

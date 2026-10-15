@@ -55,7 +55,7 @@ export const DEFAULT_REGISTRY_URL =
   'https://raw.githubusercontent.com/PastSheep/issheepbox-registry/main/plugins.json';
 
 /** 默认拉取超时（毫秒）。 */
-const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
  * 市场客户端：拉取 + 解析 registry 索引，提供列表/过滤查询。

@@ -156,7 +156,7 @@
       function render(state) {
         uiState = state;
         $('profile-name').textContent = 'profile: ' + state.profileName;
-        $('safe-mode').style.display = state.safeMode ? '' : 'none';
+        $('safe-mode').style.display = state.safeMode ? 'inline-block' : 'none';
 
         const list = $('plugin-list');
         list.innerHTML = '';
@@ -262,67 +262,72 @@
       // —— 市场视图 ——
       function setMarketOpen(open) {
         marketOpen = open;
-        $('market-view').style.display = open ? '' : 'none';
-        $('panels-view').style.display = open ? 'none' : '';
+        $('market-view').style.display = open ? 'block' : 'none';
+        $('panels-view').style.display = open ? 'none' : 'block';
         if (open) loadMarket();
       }
 
       async function loadMarket() {
-        const box = $('market-list');
-        box.innerHTML = '<div style="color:#aaa;font-size:13px">加载中…</div>';
-        const res = await window.shellAPI.market.list();
-        $('market-error').style.display = 'none';
-        box.innerHTML = '';
-        if (!res.ok) {
-          $('market-error').textContent =
-            '无法加载插件市场：' + (res.message || res.code) + '（registry 当前不可达时请检查网络）';
-          $('market-error').style.display = '';
-          return;
-        }
-        if ((res.topLevelErrors || []).length > 0) {
-          $('market-error').textContent = 'registry 索引结构异常：' + res.topLevelErrors.join('; ');
-          $('market-error').style.display = '';
-        }
-        const installed = new Map((res.installed || []).map((p) => [p.pluginId, p.version]));
-        for (const e of res.entries || []) {
-          const installedVer = installed.get(e.id);
-          const item = document.createElement('div');
-          item.className = 'market-item';
-          const perms = (e.permissions || []).join('、') || '无权限';
-          item.innerHTML =
-            '<div class="row1"><span class="name"></span>' +
-            '<span class="ver">v' + e.version + '</span>' +
-            (installedVer ? '<span class="chip installed">已装 v' + installedVer + '</span>' : '') +
-            '</div>' +
-            '<div class="desc"></div>' +
-            '<div>权限：' + perms + '</div>';
-          item.querySelector('.name').textContent = e.id;
-          item.querySelector('.desc').textContent = e.description;
-          const actions = document.createElement('div');
-          actions.className = 'actions';
-          const btnInstall = document.createElement('button');
-          btnInstall.textContent = installedVer ? '重装' : '安装';
-          btnInstall.onclick = async () => { await window.shellAPI.market.install(e.id); loadMarket(); window.shellAPI.requestState(); };
-          actions.appendChild(btnInstall);
-          if (installedVer && installedVer !== e.version) {
-            const btnUpdate = document.createElement('button');
-            btnUpdate.className = 'primary';
-            btnUpdate.textContent = '更新到 v' + e.version;
-            btnUpdate.onclick = async () => { await window.shellAPI.market.update(e.id); loadMarket(); window.shellAPI.requestState(); };
-            actions.appendChild(btnUpdate);
+        try {
+          const box = $('market-list');
+          box.innerHTML = '<div style="color:#aaa;font-size:13px">加载中…</div>';
+          const res = await window.shellAPI.market.list();
+          $('market-error').style.display = 'none';
+          box.innerHTML = '';
+          if (!res.ok) {
+            $('market-error').textContent =
+              '无法加载插件市场：' + (res.message || res.code) + '（registry 当前不可达时请检查网络）';
+            $('market-error').style.display = 'block';
+            return;
           }
-          if (installedVer) {
-            const btnUninstall = document.createElement('button');
-            btnUninstall.className = 'danger';
-            btnUninstall.textContent = '卸载';
-            btnUninstall.onclick = async () => { await window.shellAPI.market.uninstall(e.id); loadMarket(); window.shellAPI.requestState(); };
-            actions.appendChild(btnUninstall);
+          if ((res.topLevelErrors || []).length > 0) {
+            $('market-error').textContent = 'registry 索引结构异常：' + res.topLevelErrors.join('; ');
+            $('market-error').style.display = 'block';
           }
-          item.appendChild(actions);
-          box.appendChild(item);
-        }
-        if (!(res.entries || []).length) {
-          box.innerHTML = '<div style="color:#aaa;font-size:13px">registry 暂无插件条目</div>';
+          const installed = new Map((res.installed || []).map((p) => [p.pluginId, p.version]));
+          for (const e of res.entries || []) {
+            const installedVer = installed.get(e.id);
+            const item = document.createElement('div');
+            item.className = 'market-item';
+            const perms = (e.permissions || []).join('、') || '无权限';
+            item.innerHTML =
+              '<div class="row1"><span class="name"></span>' +
+              '<span class="ver">v' + e.version + '</span>' +
+              (installedVer ? '<span class="chip installed">已装 v' + installedVer + '</span>' : '') +
+              '</div>' +
+              '<div class="desc"></div>' +
+              '<div>权限：' + perms + '</div>';
+            item.querySelector('.name').textContent = e.id;
+            item.querySelector('.desc').textContent = e.description;
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+            const btnInstall = document.createElement('button');
+            btnInstall.textContent = installedVer ? '重装' : '安装';
+            btnInstall.onclick = async () => { await window.shellAPI.market.install(e.id); loadMarket(); window.shellAPI.requestState(); };
+            actions.appendChild(btnInstall);
+            if (installedVer && installedVer !== e.version) {
+              const btnUpdate = document.createElement('button');
+              btnUpdate.className = 'primary';
+              btnUpdate.textContent = '更新到 v' + e.version;
+              btnUpdate.onclick = async () => { await window.shellAPI.market.update(e.id); loadMarket(); window.shellAPI.requestState(); };
+              actions.appendChild(btnUpdate);
+            }
+            if (installedVer) {
+              const btnUninstall = document.createElement('button');
+              btnUninstall.className = 'danger';
+              btnUninstall.textContent = '卸载';
+              btnUninstall.onclick = async () => { await window.shellAPI.market.uninstall(e.id); loadMarket(); window.shellAPI.requestState(); };
+              actions.appendChild(btnUninstall);
+            }
+            item.appendChild(actions);
+            box.appendChild(item);
+          }
+          if (!(res.entries || []).length) {
+            box.innerHTML = '<div style="color:#aaa;font-size:13px">registry 暂无插件条目</div>';
+          }
+        } catch (e) {
+          $('market-error').textContent = '加载市场失败：' + (e && e.message ? e.message : String(e));
+          $('market-error').style.display = 'block';
         }
       }
 
