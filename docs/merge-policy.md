@@ -10,6 +10,15 @@
 - **主 agent 不亲自逐文件审查**，以精简上下文；仅在合并子 agent 报告异常（如冲突需需求方裁决）时介入沟通。
 - **合并子 agent 生命周期（每次合并新建，完成后销毁）**：每次合并**新建**一个合并子 agent，**不复用、不消息唤醒**历史 agent；合并完成并核验后由主 agent 立即销毁（kill）。理由：长跑复用已实证导致汇报串扰与回执缺失（summary 标题/内容错位）；项目以「仓库即记忆」为准——合并所需全部背景（merge-policy、conventions、TASKS.md、当前 main、P 待办）均可从仓库读取，不依赖跨任务记忆。新建时的提示（hint）随任务携带必要会话事实：main HEAD、待合并分支/提交/改动范围、审查要点、并行分支处理、待办状态。合并结果的唯一权威是中央仓库实况（`git show-ref` / `git log`），formal 回执仅作提示。
 
+## 0.5 提交身份（Commit Identity）
+
+- **自 2026-10-15 起**，所有 git 提交（合并、文档、版本 bump、release 等）使用统一身份：`user.name = <计算机主机名>-<Agent 标识>`，`user.email = <计算机主机名>-<Agent 标识>@local`。
+- **主机名**取本机实际值（当前：`DESKTOP-G5FAQR9`；换机后按新主机名执行）。
+- **Agent 标识**：主 agent = `DouBao`；派发的 sub-agents = 各自注册的 agent 名称（如 merger、agent-xxx、organizer 等），由创建者（主 agent / 组织者）在派发时指定。
+- 示例：`git -c user.name="DESKTOP-G5FAQR9-DouBao" -c user.email="DESKTOP-G5FAQR9-DouBao@local" commit -m "..."`。
+- 全局 git 配置保持个人身份不动；身份经每次提交的 `-c` 参数显式传入，不写全局/仓库级 config。
+- 历史提交不受影响；TASKS.md 中「合并记录（merger）」等文档措辞保留原样，不追溯改写。
+
 ## 1. main 保护规则
 
 1. **main 唯一写者是合并者（含其派发的合并子 agent）**。任何其他 agent、外部进程不得直接推送 main。
