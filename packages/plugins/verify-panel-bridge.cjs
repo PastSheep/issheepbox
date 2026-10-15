@@ -30,7 +30,6 @@ const { IsSheepBoxKernel } = require('../kernel/dist/index.js');
 
 const PLUGIN_ROOT = __dirname;
 const ECHO_ID = 'com.pastsheep.echo-panel';
-const SHELL_ID = 'org.issheepbox.shell-default';
 
 let checks = 0;
 function ok(condition, message) {
