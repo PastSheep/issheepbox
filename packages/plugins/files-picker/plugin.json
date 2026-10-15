@@ -1,0 +1,33 @@
+{
+  "id": "com.pastsheep.files-picker",
+  "name": "授权目录",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "授权目录选择 UI 面板：展示 files 服务维护的已授权目录白名单，提供「添加授权目录」入口（经 host:pick-directory 约定事件桥接宿主选择器；宿主暂未实现时优雅降级）。仅读取白名单字符串列表，不读文件内容，故不申请 files:read 权限。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "ui": {
+    "toolbox": { "label": "授权目录", "defaultOpen": "panel" },
+    "panels": [
+      {
+        "id": "files-picker-main",
+        "title": "授权目录",
+        "src": "assets/panel.html",
+        "interactive": true,
+        "width": 480,
+        "height": 360
+      }
+    ]
+  },
+  "permissions": [],
+  "requires": {},
+  "contributes": {
+    "events": [
+      {
+        "name": "host:pick-directory",
+        "description": "面板请求宿主弹出目录选择器；payload { pluginId }。桌面宿主 main.ts 目前未实现该事件桥，属刻意约定，宿主未接时本插件立即回 supported:false 降级"
+      }
+    ]
+  }
+}

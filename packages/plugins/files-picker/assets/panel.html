@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>授权目录</title>
+<style>
+  body { font-family: system-ui, 'Microsoft YaHei', sans-serif; margin: 14px; color: #222; }
+  h2 { font-size: 14px; margin: 0 0 10px; color: #555; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  button { padding: 6px 12px; border: 0; border-radius: 6px; background: #4f6ef7; color: #fff; cursor: pointer; font-size: 13px; }
+  #dirs { margin-top: 12px; }
+  .dir { padding: 6px 8px; background: #f5f7ff; border-radius: 6px; font-size: 12px; margin-bottom: 6px; word-break: break-all; }
+  #status { margin-top: 10px; font-size: 12px; color: #888; min-height: 16px; }
+  .empty { color: #aaa; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h2>已授权目录（files 服务白名单）</h2>
+  <div class="row">
+    <button id="pick">添加授权目录</button>
+  </div>
+  <div id="dirs"><div class="empty">加载中…</div></div>
+  <div id="status"></div>
+  <script>
+    // window.isbPanel 由宿主注入的 bootstrap 提供：post(data) / on(cb)
+    var dirsEl = document.getElementById('dirs');
+    var statusEl = document.getElementById('status');
+    var pickBtn = document.getElementById('pick');
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return map[c];
+      });
+    }
+
+    function renderDirs(dirs, degraded, message) {
+      if (degraded) {
+        dirsEl.innerHTML = '<div class="empty">' + escapeHtml(message || '文件服务未就绪') + '</div>';
+        return;
+      }
+      if (!dirs || dirs.length === 0) {
+        dirsEl.innerHTML = '<div class="empty">暂无已授权目录</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < dirs.length; i++) {
+        html += '<div class="dir">' + escapeHtml(dirs[i]) + '</div>';
+      }
+      dirsEl.innerHTML = html;
+    }
+
+    pickBtn.onclick = function () {
+      statusEl.textContent = '正在请求宿主选择目录…';
+      window.isbPanel.post({ type: 'pick-directory' });
+    };
+
+    window.isbPanel.on(function (msg) {
+      if (!msg) return;
+      if (msg.type === 'dirs') {
+        renderDirs(msg.dirs, msg.degraded, msg.message);
+      } else if (msg.type === 'pick-result') {
+        statusEl.textContent = msg.message || '操作未完成';
+      }
+    });
+
+    // 面板就绪后请求一次最新白名单
+    window.isbPanel.post({ type: 'refresh' });
+  </script>
+</body>
+</html>
