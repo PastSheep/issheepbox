@@ -130,6 +130,12 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
 
+  packages/plugins/settings:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
   packages/plugins/shushu-data:
     devDependencies:
       '@issheepbox/kernel':

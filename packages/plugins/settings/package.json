@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-settings",
+  "version": "1.0.0",
+  "description": "设置中心面板：registry 源/壳切换/插件启停/关于诊断",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
