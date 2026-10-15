@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, net } from 'electron';
 import { IsSheepBoxKernel } from '@issheepbox/kernel';
 import type { BootResult } from '@issheepbox/kernel';
 import { MarketClient, PLUGIN_ID_RE } from '@issheepbox/market-client';
@@ -80,7 +80,17 @@ function pushUiState(): void {
 /** 取/懒构造市场客户端（绑定当前 pluginsDir）。 */
 function getMarketClient(): MarketClient {
   if (!marketClient) {
-    marketClient = new MarketClient({ pluginsDir });
+    // 用 Electron net.fetch（Chromium 网络栈）而非 Node 全局 fetch（undici）：
+    // 用户本机 Windows 加速器代理下 undici 校验代理证书链失败
+    // （UNABLE_TO_VERIFY_LEAF_SIGNATURE），net.fetch 走 Chromium 网络栈，
+    // 信任系统/代理证书链，与渲染进程网络行为一致。
+    // 类型适配：Electron 33 net.fetch 的 TS 签名首参为 string | Request
+    // （缺 typeof fetch 的 URL 重载），而 market-client 恒传 string URL，
+    // 故 cast 为 typeof fetch 注入（运行时行为一致）。
+    marketClient = new MarketClient({
+      pluginsDir,
+      fetchImpl: net.fetch as typeof fetch,
+    });
   }
   return marketClient;
 }
