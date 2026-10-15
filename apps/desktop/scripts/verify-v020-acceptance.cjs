@@ -62,7 +62,6 @@ const AdmZip = require(require.resolve('adm-zip', { paths: [marketClientDir] }))
 const { MarketClient } = require('@issheepbox/market-client');
 
 const SHELL_DEFAULT_ID = 'org.issheepbox.shell-default';
-const APPROVAL_POLICY_ID = 'org.issheepbox.approval-policy';
 const NOTE_ID = 'org.issheepbox.example.note';
 const FILE_STATS_ID = 'org.issheepbox.example.file-stats';
 const PANEL_ID = 'note-main';
