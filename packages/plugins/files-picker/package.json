@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-files-picker",
+  "version": "1.0.0",
+  "description": "授权目录选择 UI 面板：展示 files 服务白名单，添加入口经 host:pick-directory 约定事件桥接宿主",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
