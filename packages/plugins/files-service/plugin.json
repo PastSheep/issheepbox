@@ -1,0 +1,21 @@
+{
+  "id": "org.issheepbox.files-service",
+  "name": "宿主文件能力服务",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "落地规范 F-008：注册 files 服务，受 files:read 门禁。在用户授权目录白名单内读文本/枚举目录/简单统计；越权路径（../、绝对路径、白名单外）一律拒绝，不泄漏路径信息。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "permissions": [],
+  "requires": {},
+  "contributes": {
+    "services": [
+      {
+        "name": "files",
+        "version": "1.0.0",
+        "description": "白名单约束的文件读取：authorizeDir/listAuthorizedDirs/readText/listDir/stat（每调用须经 files:read 门禁）"
+      }
+    ]
+  }
+}

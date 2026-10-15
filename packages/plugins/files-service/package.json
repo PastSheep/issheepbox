@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-files-service",
+  "version": "1.0.0",
+  "description": "F-008 宿主文件能力服务：白名单目录内读文本/枚举/统计，files:read 门禁，越权拒绝",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
