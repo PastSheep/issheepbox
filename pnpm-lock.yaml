@@ -154,6 +154,12 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
 
+  packages/plugins/updater:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
   packages/shell-default:
     dependencies:
       '@issheepbox/kernel':

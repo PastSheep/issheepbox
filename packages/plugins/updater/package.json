@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-updater",
+  "version": "1.0.0",
+  "description": "应用本体更新检查：GitHub Releases semver 比对，可忽略版本，断网静默降级",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
