@@ -1,0 +1,27 @@
+{
+  "id": "org.issheepbox.storage",
+  "name": "KV 存储服务",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "第一方基础设施插件：为其他插件提供按命名空间隔离的键值持久化服务（配置/插件数据），补齐 ctx.storage 尚未交付的能力。一切皆插件——存储不烤进内核，而是可启停、可替换的插件。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "permissions": ["files:read", "files:write"],
+  "requires": {},
+  "contributes": {
+    "services": [
+      {
+        "name": "storage",
+        "version": "1.0.0",
+        "description": "按命名空间隔离的键值持久化服务：get/set/delete/all/clear + namespace() 句柄"
+      }
+    ],
+    "events": [
+      {
+        "name": "storage:changed",
+        "description": "任一命名空间的键被 set/delete/clear 时广播，载荷 { namespace, key, op, value }"
+      }
+    ]
+  }
+}
