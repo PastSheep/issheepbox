@@ -322,6 +322,51 @@
 - 依赖：TASK-017（git-service）、TASK-012（安装链路）、TASK-019（registry 组条目，如组发布一并处理）
 - 完成时间：
 
+### TASK-023：logger 宿主服务插件（org.issheepbox.logger）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（派发时指派）
+- 分支：（派发时指派）
+- 需求描述：宿主级服务插件（**内置**，随应用分发，类似 approval-policy，取代原「diagnostics」设计——diagnostics 降级为消费方）：注册 `logging` 服务（`write(level, scope, message, meta?)` / `query(filter)`）+ 广播 `log:entry` 事件；统一日志级别（debug/info/warn/error），scope=插件 id；持久化到 userData/logs（按大小/时间轮转）；汇聚主进程/渲染进程/插件日志（宿主转发）；权限模型：**写入免费**（低风险，无需授权）、`logs:read` 才可查询/导出（第三方查看插件需授权）。
+- 验收标准：任意插件经 ctx.services 写日志成功；log:entry 事件可订阅；持久化落盘 + 重启读回 + 轮转生效；logs:read 未授权查询拒绝（fail-safe）；验证脚本覆盖；kernel/approval-policy/verify-examples 回归全绿。
+- 依赖：TASK-014（services/events seam）、TASK-015（授权持久化）
+- 完成时间：
+
+### TASK-024：日志查看面板（logger 消费方）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（派发时指派）
+- 分支：（派发时指派）
+- 需求描述：UI 消费方（可并入 settings 或独立小插件）：订阅 `log:entry` 实时滚动展示 + `logging.query` 按级别/插件/时间筛选；声明 `logs:read` 权限（未授权 fail-safe 拒绝）；error/warn 高亮。
+- 验收标准：实时滚动 + 筛选正确；未授权拒绝且无数据泄漏；卸载无残留（effect scope 回滚）；回归全绿。
+- 依赖：TASK-023
+- 完成时间：
+
+### TASK-025：settings 插件（org.issheepbox.settings）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（派发时指派）
+- 分支：（派发时指派）
+- 需求描述：内置设置中心（首启即用，面板形态）：① **registry 源自定义**（自定义索引仓库地址，落地 P-013，重启后 market-client 使用新源）；② 默认壳切换（多壳场景，persist 到 profile）；③ 插件启停管理 UI（启用/禁用/卸载入口，驱动 profile.enabled）；④ 关于与诊断页（应用版本 / 内核 ctx API 版本 / 内置与已装插件清单，与 version-policy 对齐）。
+- 验收标准：registry 源切换后 market 使用新源（重启验证）；默认壳切换生效；启停管理正确读写 profile；关于页信息与 version-policy 一致；回归全绿。
+- 依赖：TASK-012（市场链路）、TASK-023（诊断页日志入口）、P-013
+- 完成时间：
+
+### TASK-026：files-service 宿主能力（files:read 落地）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（派发时指派）
+- 分支：（派发时指派）
+- 需求描述：落地规范反馈 **F-008**——受权限约束的宿主文件服务：注册 `files:` 服务（读文本 / 目录枚举 / 统计，受 `files:read` 门禁），供 file-stats 等声明 files:read 的插件消费；**用户授权目录白名单** + 大小/类型限制 + 路径越权拒绝；可复用 TASK-016 备选路线（fs 原语增强）。
+- 验收标准：file-stats 经 files:read 授权后真实读取用户授权目录；未授权拒绝（fail-safe，不暴露任何文件）；越权路径拒绝；卸载无残留；回归全绿。
+- 依赖：TASK-014（services seam）、TASK-015；可选 TASK-016
+- 完成时间：
+
+### TASK-027：updater 更新检查插件（org.issheepbox.updater）
+- 状态：待派发（v0.3.0）
+- 负责 agent：（派发时指派）
+- 分支：（派发时指派）
+- 需求描述：应用更新感知：启动时/定时检查 GitHub Releases 最新应用版本（经 net.fetch / market-client 同款 fetchImpl）；发现新版本时 UI 提示（版本号 + Release 链接，可忽略一次）；记录上次检查时间与忽略版本（userData）；权限：`network:fetch`（或复用宿主网络服务）。**应用更新与应用版本解耦**——功能插件更新由市场负责（TASK-020），updater 只管应用本体。
+- 验收标准：版本比对正确（当前 vs latest，semver）；提示仅出现一次、可忽略；无网络时静默降级不报错；回归全绿。
+- 依赖：TASK-012、market-client 的 fetchImpl 模式
+- 完成时间：
+
 ---
 
 ## 跨任务待办（pending）
@@ -401,7 +446,7 @@
 - 说明：官方 registry（PastSheep/issheepbox-registry）接受第三方上架的方式与约束文档化：开发者 fork → 提交 plugins.json 条目（status=pending）→ PR → 维护者审核（schema 校验 + zip 资产可下载核验）→ 合并转 active；发布方自持 downloadUrl（zip 在其自己的 Release，官方不代托管）；README/docs 补充上架流程、schema 语义（pending/active）、校验命令（validate_index.py）。配套：registry 仓库独立于主仓库，上架不触发应用发布。
 
 ### P-013：自定义 registry 源配置 + 自建 registry 文档 + zip 完整性校验
-- 状态：待处理
+- 状态：待处理（其中 ① 应用配置 registryUrl 与 ② 市场 UI 数据源入口由 **TASK-025 settings** 承接）
 - 说明：用户自由搭建工具箱的配置层落地：① 应用配置 `userData/config.json` 的 `registryUrl`（默认官方地址，未配置=官方），market-client 构造时读取（构造参数已支持，改默认值来源），配置变更刷新索引；② desktop 市场 UI 提供「数据源」设置入口（显示当前 URL、可修改、重置默认）；③ 自建 registry 文档：协议为开放静态 JSON（plugins.json + schema 镜像即可自建，无需审批）——docs/registry-guide.md 说明自建/镜像/内网托管/离线场景；④ schema 增加 `sha256` 字段（zip 资产完整性校验，防下载篡改——自定义源场景下尤其必要），market-client install 时校验。
 
 ---
