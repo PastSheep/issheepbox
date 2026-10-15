@@ -1,0 +1,26 @@
+{
+  "id": "com.pastsheep.updater-ui",
+  "name": "更新提示面板",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "应用更新提示 UI 面板：订阅 updater:update-available 内核事件，面板展示新版本号与 Release 链接，支持「忽略一次」（桥接 updater 服务 dismiss）。零权限纯 UI 事件消费——网络与状态持久化由 updater 插件持有；updater 服务缺失时优雅降级不崩。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "ui": {
+    "toolbox": { "label": "更新提示", "defaultOpen": "panel" },
+    "panels": [
+      {
+        "id": "updater-main",
+        "title": "更新提示",
+        "src": "assets/panel.html",
+        "interactive": true,
+        "width": 420,
+        "height": 260
+      }
+    ]
+  },
+  "permissions": [],
+  "requires": {},
+  "contributes": {}
+}
