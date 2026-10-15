@@ -1,0 +1,27 @@
+{
+  "id": "com.pastsheep.shushu-data",
+  "name": "鼠鼠数据索引",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "跨仓库插件：拉取 DeltaForceBox-Assets 的 shushu-data-manifest.json，对外注册 shushu-data 服务并渲染静态数据面板，把鼠鼠工具箱的数据集清单接入 Is SheepBox 生态。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "permissions": ["network:fetch"],
+  "requires": {},
+  "contributes": {
+    "services": [
+      {
+        "name": "shushu-data",
+        "version": "1.0.0",
+        "description": "鼠鼠数据清单：getManifest/listDatasets/getDataset/getSummary/refresh"
+      }
+    ],
+    "events": [
+      {
+        "name": "shushu-data:updated",
+        "description": "清单拉取完成（成功或失败）后广播，载荷 { ok, error?, datasetCount? }"
+      }
+    ]
+  }
+}
