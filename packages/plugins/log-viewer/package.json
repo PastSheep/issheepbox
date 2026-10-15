@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-log-viewer",
+  "version": "1.0.0",
+  "description": "日志查看 UI 面板：实时滚动 + 筛选 + error/warn 高亮，需 logs:read 授权",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
