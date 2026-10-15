@@ -1,0 +1,27 @@
+{
+  "id": "org.issheepbox.logger",
+  "name": "日志服务",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "内置级日志服务插件：为其他插件提供统一的 write/query 日志服务，log:entry 实时广播，按大小轮转持久化到 userData。写入免费（不申请权限），历史查询受 logs:read 门禁控制。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "permissions": ["files:read", "files:write"],
+  "requires": {},
+  "contributes": {
+    "services": [
+      {
+        "name": "logging",
+        "version": "1.0.0",
+        "description": "日志服务：write(level,scope,message,meta?) 写入；query(callerPluginId, filter) 历史查询（需 logs:read）"
+      }
+    ],
+    "events": [
+      {
+        "name": "log:entry",
+        "description": "每条日志实时广播，载荷 LogEntry { ts, level, scope, message, meta? }"
+      }
+    ]
+  }
+}
