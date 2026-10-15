@@ -106,6 +106,18 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
 
+  packages/plugins/log-viewer:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  packages/plugins/logger:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
   packages/plugins/note:
     devDependencies:
       '@issheepbox/kernel':

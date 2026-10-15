@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>日志查看</title>
+<style>
+  body { font-family: system-ui, 'Microsoft YaHei', sans-serif; margin: 0; padding: 10px; color: #222; font-size: 12px; }
+  .toolbar { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+  select, input { padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+  button { padding: 4px 10px; border: 0; border-radius: 4px; background: #4f6ef7; color: #fff; cursor: pointer; font-size: 12px; }
+  #list { height: 320px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; padding: 6px; background: #fafafa; }
+  .entry { padding: 3px 6px; border-bottom: 1px solid #f0f0f0; font-family: ui-monospace, Consolas, monospace; }
+  .entry.error { background: #ffebee; color: #c62828; }
+  .entry.warn { background: #fff8e1; color: #f57f17; }
+  .entry .ts { color: #999; margin-right: 6px; }
+  .entry .scope { color: #4f6ef7; margin-right: 6px; }
+  .empty { color: #aaa; text-align: center; padding: 20px; }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <label>级别
+      <select id="level">
+        <option value="">全部</option>
+        <option value="debug">debug+</option>
+        <option value="info">info+</option>
+        <option value="warn">warn+</option>
+        <option value="error">error+</option>
+      </select>
+    </label>
+    <label>插件 <input id="scope" placeholder="插件 id（留空=全部）" style="width:140px" /></label>
+    <button id="apply">筛选</button>
+    <span id="count" style="color:#888;margin-left:auto"></span>
+  </div>
+  <div id="list"><div class="empty">等待日志…</div></div>
+  <script>
+    var list = document.getElementById('list');
+    var count = document.getElementById('count');
+    var buffer = [];
+
+    function render() {
+      if (buffer.length === 0) {
+        list.innerHTML = '<div class="empty">暂无日志</div>';
+      } else {
+        list.innerHTML = buffer.slice(-200).map(function (e) {
+          var d = new Date(e.ts);
+          var ts = d.toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+          return '<div class="entry ' + e.level + '"><span class="ts">' + ts + '</span><span class="scope">[' +
+            e.scope + ']</span>' + e.level.toUpperCase() + ': ' + e.message + '</div>';
+        }).join('');
+        list.scrollTop = list.scrollHeight;
+      }
+      count.textContent = buffer.length + ' 条';
+    }
+
+    function requestHistory() {
+      var filter = {};
+      var lv = document.getElementById('level').value;
+      if (lv) filter.minLevel = lv;
+      var sc = document.getElementById('scope').value.trim();
+      if (sc) filter.scope = sc;
+      window.isbPanel.post({ type: 'filter', filter: filter });
+    }
+
+    document.getElementById('apply').onclick = requestHistory;
+    requestHistory();
+
+    window.isbPanel.on(function (msg) {
+      if (!msg || !msg.type) return;
+      if (msg.type === 'entry') {
+        buffer.push(msg.entry);
+        render();
+      } else if (msg.type === 'history') {
+        buffer = msg.entries || [];
+        render();
+      }
+    });
+  </script>
+</body>
+</html>

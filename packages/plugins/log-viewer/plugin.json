@@ -1,0 +1,26 @@
+{
+  "id": "org.issheepbox.log-viewer",
+  "name": "日志查看面板",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "日志查看 UI 面板：订阅 log:entry 实时滚动 + 按级别/插件/时间筛选，error/warn 高亮。需 logs:read 授权；未授权时 fail-safe 显示不可用，不泄漏日志。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "ui": {
+    "toolbox": { "label": "日志查看", "defaultOpen": "panel" },
+    "panels": [
+      {
+        "id": "log-viewer-main",
+        "title": "日志查看",
+        "src": "assets/panel.html",
+        "interactive": true,
+        "width": 560,
+        "height": 420
+      }
+    ]
+  },
+  "permissions": ["logs:read"],
+  "requires": {},
+  "contributes": {}
+}
