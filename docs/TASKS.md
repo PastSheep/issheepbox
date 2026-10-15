@@ -238,6 +238,41 @@
 
 ---
 
+## 外部 agent 交付（v0.2.1）
+
+> 批次说明（合并者 2026-10-15 登记）：本批为外部 agent（DESKTOP-OKH9QGI-DouBao）在 github 远端直接开发、推送功能分支后的首次合并；两分支均经独立审核（§2 全部 PASS、无 BLOCKER、零密钥、无不应入库产物、权限声明与实现一致、命名空间与 plugin-spec §3.2 一致），由合并者在 workspaces/merger 工作区执行 --no-ff 合并、复跑验证并登记。
+
+### TASK-021：可交互面板桥（panel-bridge）
+- 状态：已完成
+- 负责 agent：外部 agent（DESKTOP-OKH9QGI-DouBao）
+- 分支：agent-doubao/feat-panel-bridge（tip `f666329`，1 提交）
+- 需求描述：宿主通用面板传输全链路——desktop main.ts 新增 `panel:post` / `panel:msg` IPC、preload 暴露 `panelBridge`；shell-default registerPanel 的 `interactive: true` 标记透传进 panels 数组；渲染进程对 interactive 面板切 iframe srcdoc 并经 `window.isbPanel` postMessage 路由 inbound/outbound 消息；echo-panel 示例插件（`com.pastsheep.echo-panel`）dogfood 全链路（面板 inbound 收到消息后 outbound 回发原文）。验证脚本 `packages/plugins/verify-panel-bridge.cjs`（内核侧事件契约 15 断言）。
+- 验收标准：registerPanel 交互标记透传、面板消息经 postMessage 路由回 echo-main 且回显原文、非自身 panelId 不串台、卸载后面板记录与监听随 effect scope 回滚无残留；typecheck/lint exit 0；kernel / approval-policy / verify-examples 回归持平。
+- 依赖：TASK-014（面板渲染契约 C4）
+- 完成时间：2026-10-15
+- **合并记录（merger）**：2026-10-15 审查通过并合并（merge `becc2de`，merge --no-ff；分支基于 `213dd51`=main HEAD 最新基线，零冲突直接并入），远端分支 `agent-doubao/feat-panel-bridge` 已删除。
+  - 审查结论：§2 全项 PASS（分支基于最新 main、提交信息符合 conventions、改动范围与任务描述一致、代码可构建测试通过、无密钥/凭据/本机专属路径、无 dist/node_modules/二进制入库）；diff 范围 11 文件 +380/-2，全部位于 apps/desktop（index.html/main.ts/preload.ts）、packages/shell-default（src/index.ts +4 行 interactive 透传位）、packages/plugins/echo-panel（新增示例插件 5 文件）、packages/plugins/verify-panel-bridge.cjs、pnpm-lock.yaml（+6 行新 importer）。
+  - 合并后复跑验证：`pnpm install` exit 0（lockfile up to date）；`pnpm run typecheck` exit 0；`pnpm run lint` **初次 exit 1**（见下「合并后修复」）；`pnpm build` + `pnpm --filter @issheepbox/plugin-echo-panel run build` exit 0（verify 脚本前置构建产物）；`node packages/plugins/verify-panel-bridge.cjs` exit 0——15 项断言全部通过（默认壳挂载、echo-panel 启用、interactive===true、src/pluginId 透传、inbound→outbound 回发路由回 echo-main、回显原文、携带主进程时间戳、非自身 panelId 忽略不串台、卸载后面板记录回滚、监听随 effect scope 回滚、kernel.stop 全卸载）。
+  - **合并后修复（merger）**：fix `86c06d8` —— `fix(plugins): 移除 verify-panel-bridge.cjs 未使用的 SHELL_ID（lint 门禁）`。合并后首次 lint exit 1：`packages/plugins/verify-panel-bridge.cjs:33 'SHELL_ID' is assigned a value but never used`（@typescript-eslint/no-unused-vars）；该常量声明后全文无任何引用，按先例（fc7d15d「fix(desktop): 移除 verify-v020-acceptance.cjs 未使用的 APPROVAL_POLICY_ID（lint 门禁）」、TASK-011 合并后修复 7296544）仅删除该未使用常量一行（1 文件 +0/-1，不动其他内容）。提交后复跑：`pnpm run lint` exit 0；`node packages/plugins/verify-panel-bridge.cjs` 15 断言仍全过。
+  - 最终全量门禁（本批合并后）：kernel 72/72、approval-policy 51/51、verify-examples 49 断言×5 场景、`pnpm --filter @issheepbox/desktop run build` exit 0，全部与基线持平。
+- **遗留问题**：iframe 真实渲染（srcdoc 注入 / postMessage / webContents.send）未经 headless 验证——该侧为 desktop 主进程 + preload + index.html 薄胶水，正确性由 tsc 构建保证；外部 agent 已请求 `pnpm dev` 点验 echo-panel 回显，**转交需求方真机确认**。
+
+### TASK-022：storage KV 服务 + shushu-data 数据索引插件
+- 状态：已完成
+- 负责 agent：外部 agent（DESKTOP-OKH9QGI-DouBao）
+- 分支：agent-doubao/feat-storage-plugin（tip `6308ed5`，2 提交：f91b6fc org.issheepbox.storage、6308ed5 com.pastsheep.shushu-data）
+- 需求描述：① 第一方 KV 持久化服务插件 `org.issheepbox.storage`——namespace().set/get 读写、storage:changed 事件、命名空间隔离、数据写穿透落盘到 host:user-data（issheepbox-storage.json）、跨「内核重启」从磁盘读回；`files:read` + `files:write` 双权限声明，经 approval-policy（host:user-data 存在性）与 ctx.files（P-009 宿主能力运行时门禁）双闸；DenyPrompter 拒绝后不可启用、不注册服务；卸载经可逆 effects 注销无残留。② 跨仓库数据索引插件 `com.pastsheep.shushu-data`——`network:fetch` 声明 + 挂载自检（第一道闸），拉取 DeltaForceBox-Assets 公开 manifest（实测 6 数据集 / 3721 条目），注册数据服务并向 shell:ui 注册静态数据面板；网络失败优雅降级（插件仍挂载、数据集为空、记录拉取错误、不崩溃）；拒绝 network:fetch 后不可启用。③ `packages/plugins/storage/NEXT-PLUGINS-DESIGN.md` 后续插件方向设计。验证脚本 `verify-storage.cjs`（20 断言）与 `verify-shushu.cjs`（18 断言）。
+- 验收标准：storage 授权后挂载/读写/落盘/跨重启读回/命名空间隔离/卸载无残留、拒绝后不挂载不注册服务；shushu-data 授权后拉取 manifest 条目数正确、注册服务与面板、网络失败降级、拒绝后不可启用；typecheck/lint exit 0；kernel / approval-policy / verify-examples 回归持平。
+- 依赖：TASK-015（host:user-data 持久化接线 C3）、P-009（ctx.files 宿主能力）
+- 完成时间：2026-10-15
+- **合并记录（merger）**：2026-10-15 审查通过并合并（merge `02cb2cf`，merge --no-ff；分支基于 `fc7d15d`，落后 main 4 提交；改动域 packages/plugins/** 与 main 增量 docs/ + apps/desktop/ 逐文件零重叠；pnpm-lock.yaml 两分支均改过不同 importer 段，ort 自动合并干净，无文本冲突），远端分支 `agent-doubao/feat-storage-plugin` 已删除。
+  - 审查结论：§2 全项 PASS；diff 范围 14 文件 +1163（纯新增），位于 packages/plugins/storage（plugin.json/package.json/src/tsconfig/README/NEXT-PLUGINS-DESIGN.md）、packages/plugins/shushu-data（plugin.json/package.json/src/tsconfig/README）、packages/plugins/verify-storage.cjs、verify-shushu.cjs、pnpm-lock.yaml（+12 行新 importer）；零密钥、无 dist/node_modules/二进制入库；权限声明与实现一致（storage 声明 files:read+files:write、shushu-data 声明 network:fetch，均与代码实际调用面相符）；命名空间依据 docs/plugin-spec-v1.md §3.2（org.issheepbox.* 第一方 / com.pastsheep.* 第三方）。
+  - 合并后复跑验证：`pnpm install` exit 0（工作区项目数 10→12，lockfile 通过 supply-chain 校验 439 条目）；`pnpm run typecheck` exit 0；`pnpm run lint` exit 0；`pnpm --filter @issheepbox/plugin-storage run build` / `pnpm --filter @issheepbox/plugin-shushu-data run build` exit 0；`node packages/plugins/verify-storage.cjs` exit 0——20 项断言（2 场景：授权后挂载/读写/落盘/跨重启读回/隔离/卸载无残留 + DenyPrompter 拒绝路径）；`node packages/plugins/verify-shushu.cjs` exit 0——18 项断言（3 场景 + 2 纯函数：授权后拉取 6 数据集/3721 条目/getDataset(az3).count=1262/注册服务与面板/卸载无残留、网络失败 ENOTFOUND 优雅降级、拒绝 network:fetch 不可启用）。
+  - 最终全量门禁：kernel 72/72、approval-policy 51/51、verify-examples 49 断言×5 场景、verify-panel-bridge 15、verify-storage 20、verify-shushu 18、desktop build exit 0，全部与基线持平。
+- **遗留问题（NOTE）**：① shushu-data 数据源为外部仓库 `raw.githubusercontent.com/PastSheep/DeltaForceBox-Assets`（合并者实测拉取 HTTP 200、6 数据集/3721 条目可达），**可达性随外部仓库变化**——外部仓库被删除/改名/网络不通时插件自动降级为空数据集（已优雅处理），但面板数据将为空；② `NEXT-PLUGINS-DESIGN.md` 位于 packages/plugins/storage/ 插件目录而非 docs/，且文档中 shushu-data 仍列于 backlog（实际 shushu-data 已实现）——**文档未同步**，登记 NOTE，建议后续文档任务将其迁移至 docs/ 并把 shushu-data 从 backlog 勾销。
+
+---
+
 ## v0.3.0 规划（方向已确认，待 v0.2.0 批次完成后派发）
 
 > 架构依据（2026-10-15 需求方确认）：「一切皆插件、最小可运行版本精简」——内核只保留**原语层**（loader/lifecycle/events/profile/权限接口 + fs 读写已有；本批补充进程执行原语），一切**业务能力以独立插件形态提供**（git 解析/拓扑 UI 均为插件）；插件依赖链（P-005 requires + 拓扑排序）作为聚合基础，插件组提供场景化组合；**插件发布与应用版本解耦**——应用发布（v0.x.0 tag）仅含内核 + 内置插件（shell-default/approval-policy），功能插件独立版本、独立 Release、由市场拉取（TASK-020）。
