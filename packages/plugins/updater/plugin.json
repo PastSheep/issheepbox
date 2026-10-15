@@ -1,0 +1,27 @@
+{
+  "id": "org.issheepbox.updater",
+  "name": "应用更新检查",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "应用本体更新感知：启动/定时查 GitHub Releases 最新应用版本，semver 比对，发现新版时提示（版本号+Release 链接，可忽略一次）。无网络静默降级不报错。功能插件更新归市场，本插件只管应用本体。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "permissions": ["network:fetch", "files:read", "files:write"],
+  "requires": {},
+  "contributes": {
+    "services": [
+      {
+        "name": "updater",
+        "version": "1.0.0",
+        "description": "应用更新检查：checkForUpdate(currentVersion) / getState() / dismiss(version)；发现新版发 updater:update-available 事件"
+      }
+    ],
+    "events": [
+      {
+        "name": "updater:update-available",
+        "description": "发现新版本时广播，载荷 { currentVersion, latestVersion, releaseUrl }；被忽略版本不重复广播"
+      }
+    ]
+  }
+}
