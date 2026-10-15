@@ -45,4 +45,18 @@ contextBridge.exposeInMainWorld('shellAPI', {
   /** 读取插件包内文本资源（契约 C4 面板 src）。 */
   readPluginAsset: (pluginId: string, relativePath: string) =>
     ipcRenderer.invoke('shell:read-plugin-asset', { pluginId, relativePath }),
+
+  /**
+   * 可交互面板桥（与 panel.html 内注入的 window.isbPanel 配合）：
+   *  - post：iframe 面板 → 主进程（转发为内核事件 panel:inbound）
+   *  - onMessage：主进程 panel:outbound → iframe 面板
+   */
+  panelBridge: {
+    post: (body: unknown) => ipcRenderer.send('panel:post', body),
+    onMessage: (callback: (msg: unknown) => void) => {
+      const handler = (_event: unknown, msg: unknown) => callback(msg);
+      ipcRenderer.on('panel:msg', handler);
+      return () => ipcRenderer.removeListener('panel:msg', handler);
+    },
+  },
 });

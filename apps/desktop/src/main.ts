@@ -271,6 +271,14 @@ void app.whenReady().then(async () => {
   // 订阅壳刷新信号 → 重新推送状态。
   kernel.events.on('shell:ui-refresh', () => pushUiState());
 
+  // 可交互面板桥（通用传输）：业务插件经 ctx.events.emit('panel:outbound',
+  // { pluginId, panelId, data }) 发消息 → 转发渲染进程，由 iframe 面板接收。
+  // 宿主不懂面板业务，只做事件转发（与 C1 approval 桥同构）。
+  kernel.events.on('panel:outbound', (payload) => {
+    if (!win || win.isDestroyed()) return;
+    win.webContents.send('panel:msg', payload);
+  });
+
   // 首次推送。
   pushUiState();
 
@@ -285,6 +293,21 @@ app.on('window-all-closed', () => {
 
 // 渲染进程主动请求状态（页面加载后拉一次）。
 ipcMain.handle('shell:get-state', () => pushUiState());
+
+/**
+ * 可交互面板桥（通用传输，面板 iframe → 内核）：
+ * 渲染进程把 iframe 内面板的 postMessage 经 preload panelBridge.post 转上来，
+ * 再以 panel:inbound 事件广播给内核，业务插件自行按 panelId 认领。
+ */
+ipcMain.on('panel:post', (_event, body) => {
+  const { pluginId, panelId, data } = (body ?? {}) as {
+    pluginId?: string;
+    panelId?: string;
+    data?: unknown;
+  };
+  if (typeof pluginId !== 'string' || typeof panelId !== 'string') return;
+  kernel.events.emit('panel:inbound', { pluginId, panelId, data });
+});
 
 // ---------------------------------------------------------------------------
 // 市场安装链路 IPC（TASK-012）

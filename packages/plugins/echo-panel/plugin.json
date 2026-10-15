@@ -1,0 +1,25 @@
+{
+  "id": "com.pastsheep.echo-panel",
+  "name": "可交互面板示例",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "可交互面板桥（iframe + postMessage）的最小示例：面板内输入文字发送到主进程，主进程回显。用于验证 panel:inbound/panel:outbound 全链路。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "ui": {
+    "toolbox": { "label": "交互面板示例", "defaultOpen": "panel" },
+    "panels": [
+      {
+        "id": "echo-main",
+        "title": "可交互面板示例",
+        "src": "assets/panel.html",
+        "width": 420,
+        "height": 320
+      }
+    ]
+  },
+  "permissions": [],
+  "requires": {},
+  "contributes": {}
+}

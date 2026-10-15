@@ -31,6 +31,9 @@ import type { PluginContext } from '@issheepbox/kernel';
  *    宿主经 IPC shell:read-plugin-asset 读取插件包资源
  *  - pluginId：面板所属插件（宿主读资源/定位插件目录用）
  *  - width/height：面板建议尺寸（px），与 manifest ui.panels[] 声明对齐
+ *  - interactive：true 时宿主用 <iframe srcdoc> 挂载（脚本可执行）并接通
+ *    panel:inbound/panel:outbound 消息桥（见 desktop main.ts/preload/index.html）；
+ *    缺省 false = 既有静态 innerHTML 注入（向后兼容）
  */
 export interface PanelContentOptions {
   pluginId?: string;
@@ -38,6 +41,7 @@ export interface PanelContentOptions {
   html?: string;
   width?: number;
   height?: number;
+  interactive?: boolean;
 }
 
 /** shell:ui service seam（供后续插件注册面板入口）。 */
