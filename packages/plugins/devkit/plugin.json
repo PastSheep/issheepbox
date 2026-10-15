@@ -1,0 +1,25 @@
+{
+  "id": "com.pastsheep.devkit",
+  "name": "开发者小工具",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "交互式开发者工具箱：JSON 格式化、Base64、URL 编解码、时间戳转换（面板内本地计算）；收藏历史经面板桥落 storage。dogfood 可交互面板桥。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "ui": {
+    "toolbox": { "label": "开发者小工具", "defaultOpen": "panel" },
+    "panels": [
+      {
+        "id": "devkit-main",
+        "title": "开发者小工具",
+        "src": "assets/panel.html",
+        "width": 680,
+        "height": 520
+      }
+    ]
+  },
+  "permissions": [],
+  "requires": {},
+  "contributes": {}
+}
