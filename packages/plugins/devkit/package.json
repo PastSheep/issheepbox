@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-devkit",
+  "version": "1.0.0",
+  "description": "交互式开发者工具箱（JSON/Base64/URL/时间戳），dogfood 面板桥 + storage",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
