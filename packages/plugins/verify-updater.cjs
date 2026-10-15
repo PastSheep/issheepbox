@@ -13,6 +13,8 @@
  *   S2  dismiss 后同版本不再提示
  *   S3  断网/请求失败静默降级（不抛错，error 字段填充）
  *   S4  状态持久化（lastCheckAt）+ 卸载服务注销
+ *   S5  宿主注入 host:net：checkForUpdate 缺省走 host:net.fetch（不碰全局 fetch）
+ *   S6  未注册 host:net：checkForUpdate 缺省回退全局 fetch（stub 全局）
  */
 'use strict';
 
@@ -153,6 +155,33 @@ async function main() {
     ok(r.updateAvailable === false, 'HTTP 500 时 updateAvailable=false');
     ok(/500/.test(r.error), 'HTTP 500 时 error 含状态码');
 
+    // —— S5：宿主注入 host:net，checkForUpdate 缺省走 host:net.fetch ——
+    const netCalls = [];
+    kernel.services.register('host:net', {
+      fetch: async (url) => {
+        netCalls.push(url);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ tag_name: 'v0.5.0', html_url: 'https://github.com/x/releases/tag/v0.5.0' }),
+        };
+      },
+    });
+    // 全局 fetch 换成会抛错的，证明插件没走它
+    const origGlobal = globalThis.fetch;
+    globalThis.fetch = async () => { throw new Error('不应调用全局 fetch'); };
+    let r5;
+    try {
+      r5 = await updater.checkForUpdate('0.2.2');
+    } finally {
+      globalThis.fetch = origGlobal;
+    }
+    ok(netCalls.length === 1, `host:net.fetch 被调用 1 次（实际 ${netCalls.length}）`);
+    ok(typeof netCalls[0] === 'string' && /api\.github\.com/.test(netCalls[0]),
+      'host:net.fetch 收到 GitHub API URL');
+    ok(r5.updateAvailable === true && r5.latestVersion === '0.5.0',
+      '经 host:net 完成更新检查（0.5.0 > 0.2.2）');
+
     // —— S4：状态持久化 + 卸载 ——
     ok(updater.getState().lastCheckAt !== null, 'getState().lastCheckAt 已记录');
     const stateFile = path.join(hostDir, 'issheepbox-updater-state.json');
@@ -162,7 +191,40 @@ async function main() {
     ok(!kernel.services.has('updater'), '卸载后 updater 服务已注销（可逆 effects）');
 
     await kernel.stop();
-    console.log(`\n全部通过：${checks} 项断言（4 组）`);
+
+    // —— S6：未注册 host:net 时，checkForUpdate 缺省回退全局 fetch ——
+    console.log('\n[S6] 未注册 host:net：缺省回退全局 fetch（stub 全局 fetch，不崩）');
+    const kernel2 = new IsSheepBoxKernel();
+    await kernel2.start(path.join(tmpRoot, 'ud-fallback'), pluginsDir);
+    await kernel2.lifecycle.mount(makeApprovalPolicy());
+    kernel2.services.register('host:user-data', { dir: hostDir });
+
+    // stub 全局 fetch 返回固定 GitHub Releases 响应
+    const globalCalls = [];
+    const origGlobal2 = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      globalCalls.push(url);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ tag_name: 'v0.6.0', html_url: 'https://github.com/x/releases/tag/v0.6.0' }),
+      };
+    };
+
+    try {
+      await kernel2.profile.enable(UPDATER_ID);
+      const updater2 = kernel2.services.get('updater');
+      ok(updater2 && typeof updater2.checkForUpdate === 'function', 'fallback 场景 updater 服务已注册');
+      const r6 = await updater2.checkForUpdate('0.2.2');
+      ok(globalCalls.length === 1, `全局 fetch 被调用 1 次（实际 ${globalCalls.length}）`);
+      ok(r6.updateAvailable === true && r6.latestVersion === '0.6.0',
+        '经全局 fetch 完成更新检查（回退路径不崩）');
+    } finally {
+      globalThis.fetch = origGlobal2;
+    }
+    await kernel2.stop();
+
+    console.log(`\n全部通过：${checks} 项断言（6 组）`);
     process.exitCode = 0;
   } catch (err) {
     console.error(`\n验证失败：${err.message}`);

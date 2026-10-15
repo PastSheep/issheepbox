@@ -97,7 +97,7 @@ export default function main(ctx: PluginContext): void {
     currentVersion: string,
     opts?: { fetchImpl?: FetchLike },
   ): Promise<UpdateCheckResult> {
-    const fetchImpl = opts?.fetchImpl ?? defaultFetch();
+    const fetchImpl = opts?.fetchImpl ?? defaultFetch(ctx);
     if (!fetchImpl) {
       return { updateAvailable: false, currentVersion, error: '当前环境无 fetch 能力' };
     }
@@ -211,8 +211,14 @@ function loadState(ctx: PluginContext, baseDir: string | null): UpdaterState {
   }
 }
 
-/** 取全局 fetch（主进程 Node 22 自带）。 */
-function defaultFetch(): FetchLike | null {
-  const fn = (globalThis as { fetch?: FetchLike }).fetch;
-  return fn ?? null;
+/** 取网络 fetch：优先宿主 host:net.fetch（Electron net.fetch，规避 undici 代理 TLS
+ *  证书链校验失败）；宿主未注入时回退主进程全局 fetch（undici）；两者皆无返回 null。 */
+function defaultFetch(ctx: PluginContext): FetchLike | null {
+  if (ctx.services.has('host:net')) {
+    const host = ctx.services.get<{ fetch?: unknown }>('host:net');
+    if (host && typeof host.fetch === 'function') {
+      return host.fetch as FetchLike;
+    }
+  }
+  return (globalThis as { fetch?: FetchLike }).fetch ?? null;
 }

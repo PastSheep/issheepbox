@@ -4,6 +4,12 @@
  * 用 stub 的 global.fetch 喂入真实形状的 manifest fixture，走真实内核全链路：
  * 授权 → 挂载 → 拉取(假) → 解析 → 注册服务/面板 → 卸载无残留。
  *
+ * 覆盖：
+ *   S1  授权后拉取(假) → 服务/面板 → 数据正确 → 卸载无残留（回退全局 fetch）
+ *   S2  网络失败优雅降级：服务仍注册、面板显示降级信息、不崩溃
+ *   S3  DenyPrompter 拒绝 network:fetch：不可启用、不注册服务
+ *   S4  宿主注入 host:net：插件经 host:net.fetch 取网（不碰全局 fetch）
+ *
  * 前置：
  *   pnpm install
  *   pnpm --filter @issheepbox/kernel --filter @issheepbox/approval-policy build
@@ -150,6 +156,40 @@ async function scenarioDeny(pluginsDir, root) {
   await kernel.stop();
 }
 
+async function scenarioHostNet(pluginsDir, root) {
+  console.log('\n[S4] 宿主注入 host:net：插件经 host:net.fetch 取网（不碰全局 fetch）');
+  const kernel = new IsSheepBoxKernel();
+  await kernel.start(path.join(root, 'ud-net'), pluginsDir);
+  await boot(kernel, new GrantAllPrompter());
+
+  // 注册假 host:net，fetch 被 spy 捕获
+  const calls = [];
+  kernel.services.register('host:net', {
+    fetch: async (url) => {
+      calls.push(url);
+      return { ok: true, status: 200, text: async () => FIXTURE };
+    },
+  });
+
+  // 全局 fetch 换成会抛错的，证明插件没走它
+  const origGlobal = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('不应调用全局 fetch'); };
+
+  try {
+    await kernel.profile.enable(SHUSHU_ID);
+  } finally {
+    globalThis.fetch = origGlobal;
+  }
+
+  ok(calls.length === 1, `host:net.fetch 被调用 1 次（实际 ${calls.length}）`);
+  ok(typeof calls[0] === 'string' && calls[0].includes('shushu-data-manifest.json'),
+    'host:net.fetch 收到正确 URL');
+  const svc = kernel.services.get('shushu-data');
+  ok(svc && svc.listDatasets().length === 6, '经 host:net 拉取后数据集解析正确');
+  ok(svc.lastError() === null, 'host:net 路径拉取成功后无错误');
+  await kernel.stop();
+}
+
 async function main() {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'isb-shushu-verify-'));
   const pluginsDir = path.join(tmpRoot, 'plugins');
@@ -166,7 +206,8 @@ async function main() {
     await scenarioHappy(pluginsDir, path.join(tmpRoot, 's1'));
     await scenarioOffline(pluginsDir, path.join(tmpRoot, 's2'));
     await scenarioDeny(pluginsDir, path.join(tmpRoot, 's3'));
-    console.log(`\n全部通过：${checks} 项断言（3 个场景 + 2 项纯函数）`);
+    await scenarioHostNet(pluginsDir, path.join(tmpRoot, 's4'));
+    console.log(`\n全部通过：${checks} 项断言（4 个场景 + 2 项纯函数）`);
   } catch (err) {
     console.error(`\n验证失败：${err.message}`);
     console.error(err.stack);

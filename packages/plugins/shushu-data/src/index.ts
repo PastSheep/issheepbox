@@ -16,7 +16,8 @@
  *  - 可逆 effects：服务/面板注册在卸载时由内核自动回滚。
  *
  * ctx 使用 v1 已交付接口：manifest / apiVersion / logger / events / services / effects。
- * 注意：v1 尚无 ctx.net 宿主能力，这里临时用主进程全局 fetch；待 ctx.net 交付后替换。
+ * 网络取值：优先宿主注入的 host:net.fetch（Electron net.fetch，规避 undici 代理 TLS
+ * 证书失败）；宿主未注入时回退主进程全局 fetch（undici）；两者皆无则报错。
  */
 import type { PluginContext } from '@issheepbox/kernel';
 
@@ -113,7 +114,7 @@ export default async function main(ctx: PluginContext): Promise<void> {
 
   async function refresh(): Promise<DatasetInfo[]> {
     try {
-      const text = await remoteFetch(REMOTE_MANIFEST_URL);
+      const text = await remoteFetch(ctx, REMOTE_MANIFEST_URL);
       state = parseManifest(text);
       error = null;
       if (state) cache?.set('manifest', state);
@@ -181,10 +182,20 @@ function tryGetCache(ctx: PluginContext): StorageScoped | null {
   }
 }
 
-/** 取全局 fetch（主进程 Node 22 自带）；v1 无 ctx.net 宿主能力。 */
-function remoteFetch(url: string): Promise<string> {
-  const fn = (globalThis as { fetch?: FetchLike }).fetch;
-  if (!fn) return Promise.reject(new Error('当前环境无全局 fetch'));
+/** 取网络 fetch：优先宿主 host:net.fetch（Electron net.fetch，规避 undici 代理 TLS
+ *  证书链校验失败）；宿主未注入时回退主进程全局 fetch（undici）；两者皆无则报错。 */
+function remoteFetch(ctx: PluginContext, url: string): Promise<string> {
+  let fn: FetchLike | undefined;
+  if (ctx.services.has('host:net')) {
+    const host = ctx.services.get<{ fetch?: unknown }>('host:net');
+    if (host && typeof host.fetch === 'function') {
+      fn = host.fetch as FetchLike;
+    }
+  }
+  if (!fn) {
+    fn = (globalThis as { fetch?: FetchLike }).fetch;
+  }
+  if (!fn) return Promise.reject(new Error('当前环境无 fetch 能力（host:net 与全局 fetch 均缺失）'));
   return fn(url).then((res) => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.text();
