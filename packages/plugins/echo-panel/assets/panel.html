@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>可交互面板示例</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 14px; color: #222; }
+  h2 { font-size: 14px; margin: 0 0 10px; color: #555; }
+  .row { display: flex; gap: 8px; }
+  input { flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  button { padding: 6px 12px; border: 0; border-radius: 6px; background: #4f6ef7; color: #fff; cursor: pointer; font-size: 13px; }
+  #out { margin-top: 12px; padding: 10px; background: #f5f7ff; border-radius: 6px; font-size: 13px; min-height: 40px; }
+</style>
+</head>
+<body>
+  <h2>可交互面板桥示例（iframe &harr; 主进程）</h2>
+  <div class="row">
+    <input id="txt" placeholder="输入点什么，点发送" />
+    <button id="send">发送</button>
+  </div>
+  <div id="out">等待主进程回显…</div>
+  <script>
+    // window.isbPanel 由宿主注入的 bootstrap 提供：post(data) / on(cb)
+    var out = document.getElementById('out');
+    document.getElementById('send').onclick = function () {
+      var text = document.getElementById('txt').value;
+      window.isbPanel.post({ text: text });
+    };
+    window.isbPanel.on(function (msg) {
+      out.textContent = (msg && msg.text) ? msg.text : JSON.stringify(msg);
+    });
+  </script>
+</body>
+</html>

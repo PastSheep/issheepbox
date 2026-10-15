@@ -182,10 +182,24 @@
         renderPanels(state.panels || []);
       }
 
-      // —— 面板挂载区（契约 C4）：html 直接注入；src 经 IPC 读插件包资源注入 ——
+      // —— 面板挂载区（契约 C4）：html 直接注入；src 经 IPC 读插件包资源注入；
+      //    interactive=true 时改用 <iframe srcdoc>（脚本可执行）并接通面板桥 ——
+      const iframeMap = new Map(); // panelId -> iframe element
+
+      function panelBootstrap(pluginId, panelId) {
+        // 注入到面板 srcdoc 头部：面板内用 window.isbPanel.post(data) / .on(cb)。
+        return '<script>(function(){' +
+          'var pid=' + JSON.stringify(pluginId) + ',pan=' + JSON.stringify(panelId) + ';var hs=[];' +
+          'window.addEventListener("message",function(e){if(e.data&&e.data.__isb==="out"){hs.forEach(function(h){h(e.data.data);});}});' +
+          'window.isbPanel={post:function(d){window.parent.postMessage({__isb:"in",pluginId:pid,panelId:pan,data:d},"*");},' +
+          'on:function(h){hs.push(h);}};' +
+          '})();<\/script>';
+      }
+
       async function renderPanels(panels) {
         const view = $('panels-view');
         view.innerHTML = '';
+        iframeMap.clear();
         if (!panels.length) {
           view.innerHTML = '<div class="panel-placeholder">面板占位 — 插件将在此渲染 UI</div>';
           return;
@@ -200,7 +214,21 @@
           card.appendChild(body);
           view.appendChild(card);
 
-          if (panel.html) {
+          if (panel.interactive && panel.src && panel.pluginId) {
+            // 可交互面板：iframe srcdoc 加载插件 HTML，注入 isbPanel 桥。
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = 'width:100%;height:' + (panel.height || 320) +
+              'px;border:1px solid #eee;border-radius:6px;background:#fff';
+            try {
+              const res = await window.shellAPI.readPluginAsset(panel.pluginId, panel.src);
+              const html = res.ok ? res.content : '(资源读取失败：' + res.message + ')';
+              iframe.srcdoc = panelBootstrap(panel.pluginId, panel.id) + html;
+            } catch (e) {
+              iframe.srcdoc = '<div style="color:#c62822;font-size:12px">面板加载失败</div>';
+            }
+            body.appendChild(iframe);
+            iframeMap.set(panel.id, iframe);
+          } else if (panel.html) {
             body.innerHTML = panel.html;
           } else if (panel.src && panel.pluginId) {
             try {
@@ -214,6 +242,22 @@
           }
         }
       }
+
+      // iframe 面板 → 主进程：把面板 postMessage 转发为 IPC。
+      window.addEventListener('message', (e) => {
+        const m = e.data;
+        if (!m || m.__isb !== 'in') return;
+        window.shellAPI.panelBridge.post({ pluginId: m.pluginId, panelId: m.panelId, data: m.data });
+      });
+
+      // 主进程 → iframe 面板：按 panelId 路由到对应 iframe。
+      window.shellAPI.panelBridge.onMessage((msg) => {
+        const { panelId, data } = msg || {};
+        const iframe = iframeMap.get(panelId);
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({ __isb: 'out', data }, '*');
+        }
+      });
 
       // —— 市场视图 ——
       function setMarketOpen(open) {

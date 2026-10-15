@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-echo-panel",
+  "version": "1.0.0",
+  "description": "可交互面板桥（iframe + postMessage）最小示例：面板 <-> 主进程消息往返",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
