@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-logger",
+  "version": "1.0.0",
+  "description": "内置级日志服务插件：write/query + log:entry 实时广播 + 按大小轮转持久化",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
