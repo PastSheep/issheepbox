@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>更新提示</title>
+<style>
+  body { font-family: system-ui, 'Microsoft YaHei', sans-serif; margin: 14px; color: #222; }
+  h2 { font-size: 14px; margin: 0 0 10px; color: #555; font-weight: 600; }
+  #idle { font-size: 12px; color: #999; }
+  #unavailable { display: none; background: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #8a6d3b; }
+  #prompt { display: none; background: #f0f7ff; border: 1px solid #bcd8ff; border-radius: 8px; padding: 12px 14px; }
+  .ver { font-size: 15px; font-weight: 700; color: #1a5fd0; }
+  .meta { font-size: 12px; color: #666; margin: 6px 0 10px; }
+  a { color: #1a5fd0; }
+  .row { display: flex; gap: 8px; justify-content: flex-end; }
+  button { padding: 5px 12px; border: 1px solid #bcd8ff; border-radius: 6px; background: #fff; color: #1a5fd0; cursor: pointer; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h2>应用更新</h2>
+  <div id="unavailable">更新服务暂不可用</div>
+  <div id="idle">暂无可用更新</div>
+  <div id="prompt">
+    <div class="ver">新版本 <span id="latest"></span> 可用</div>
+    <div class="meta">当前版本 <span id="current"></span> · <a id="release" href="#" target="_blank" rel="noopener">查看 Release</a></div>
+    <div class="row"><button id="dismiss">忽略一次</button></div>
+  </div>
+  <script>
+    // window.isbPanel 由宿主注入的 bootstrap 提供：post(data) / on(cb)
+    var idle = document.getElementById('idle');
+    var unavailable = document.getElementById('unavailable');
+    var prompt = document.getElementById('prompt');
+    var latest = document.getElementById('latest');
+    var current = document.getElementById('current');
+    var releaseLink = document.getElementById('release');
+
+    document.getElementById('dismiss').onclick = function () {
+      window.isbPanel.post({ type: 'dismiss', latestVersion: latest.textContent });
+    };
+
+    window.isbPanel.on(function (msg) {
+      if (!msg) return;
+      if (msg.type === 'update-available') {
+        latest.textContent = msg.latestVersion || '';
+        current.textContent = msg.currentVersion || '';
+        releaseLink.href = msg.releaseUrl || '#';
+        prompt.style.display = 'block';
+        idle.style.display = 'none';
+        unavailable.style.display = 'none';
+      } else if (msg.type === 'dismissed') {
+        prompt.style.display = 'none';
+        idle.style.display = 'block';
+        unavailable.style.display = 'none';
+      } else if (msg.type === 'unavailable') {
+        unavailable.textContent = msg.message || '更新服务暂不可用';
+        prompt.style.display = 'none';
+        unavailable.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

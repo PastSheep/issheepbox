@@ -1,0 +1,16 @@
+{
+  "name": "@issheepbox/plugin-updater-ui",
+  "version": "1.0.0",
+  "description": "应用更新提示 UI 面板：订阅 updater:update-available 事件，展示新版本与 Release 链接，可忽略一次；零权限纯 UI 桥",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@issheepbox/kernel": "workspace:*"
+  }
+}
