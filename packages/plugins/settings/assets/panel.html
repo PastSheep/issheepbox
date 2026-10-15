@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>设置中心</title>
+<style>
+  body { font-family: system-ui, 'Microsoft YaHei', sans-serif; margin: 0; padding: 12px; color: #222; font-size: 12px; }
+  h2 { font-size: 13px; margin: 12px 0 6px; color: #4f6ef7; border-bottom: 1px solid #eef; padding-bottom: 3px; }
+  h2:first-child { margin-top: 0; }
+  .row { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+  input { flex: 1; padding: 5px 7px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+  button { padding: 5px 10px; border: 0; border-radius: 4px; background: #4f6ef7; color: #fff; cursor: pointer; font-size: 12px; }
+  button.sec { background: #888; }
+  button.danger { background: #e53935; }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  td { padding: 4px 6px; border-bottom: 1px solid #f0f0f0; }
+  .muted { color: #888; }
+  code { background: #f5f7ff; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+  <h2>Registry 源</h2>
+  <div class="row">
+    <input id="regUrl" placeholder="registry URL" />
+    <button id="saveReg">保存</button>
+    <button id="resetReg" class="sec">重置默认</button>
+  </div>
+  <div class="muted" id="regDefault"></div>
+
+  <h2>默认壳</h2>
+  <div class="row"><span id="curShell" class="muted"></span></div>
+
+  <h2>插件管理</h2>
+  <div id="pluginList"><div class="muted">加载中…</div></div>
+
+  <h2>关于与诊断</h2>
+  <div id="diag" class="muted"></div>
+
+  <script>
+    var state = { diagnostics: null };
+
+    function refresh() { window.isbPanel.post({ type: 'get-all' }); }
+
+    function render() {
+      var d = state.diagnostics;
+      if (!d) return;
+      document.getElementById('regUrl').value = d.registryUrl;
+      document.getElementById('regDefault').textContent = '默认：' + d.defaultRegistryUrl;
+      document.getElementById('curShell').textContent = '当前：' + (d.currentShell || '（未设置）');
+      document.getElementById('diag').innerHTML =
+        '插件 <code>' + d.pluginId + '</code> v' + d.pluginVersion +
+        ' · 内核 ctx API v' + d.apiVersion;
+      var list = d.enabled || [];
+      document.getElementById('pluginList').innerHTML = list.length === 0
+        ? '<div class="muted">无已启用插件</div>'
+        : '<table>' + list.map(function (id) {
+            return '<tr><td>' + id + '</td><td style="text-align:right">' +
+              '<button data-disable="' + id + '">禁用</button> ' +
+              '<button class="danger" data-uninstall="' + id + '">卸载</button>' +
+              '</td></tr>';
+          }).join('') + '</table>';
+    }
+
+    document.getElementById('saveReg').onclick = function () {
+      window.isbPanel.post({ type: 'set-registryUrl', url: document.getElementById('regUrl').value });
+    };
+    document.getElementById('resetReg').onclick = function () {
+      window.isbPanel.post({ type: 'reset-registryUrl' });
+    };
+    document.getElementById('pluginList').addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.dataset.disable) window.isbPanel.post({ type: 'request-disable', pluginId: t.dataset.disable });
+      if (t.dataset.uninstall) window.isbPanel.post({ type: 'request-uninstall', pluginId: t.dataset.uninstall });
+    });
+
+    window.isbPanel.on(function (msg) {
+      if (!msg) return;
+      if (msg.type === 'state') { state.diagnostics = msg.diagnostics; render(); }
+      if (msg.type === 'accepted') { refresh(); }
+    });
+
+    refresh();
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+{
+  "id": "org.issheepbox.settings",
+  "name": "设置中心",
+  "version": "1.0.0",
+  "apiVersion": "^1.0.0",
+  "description": "设置中心面板：registry 源自定义、默认壳切换、插件启停管理、关于与诊断。配置持久化到 userData/config.json；启停/壳切换只发命令事件，由宿主执行。",
+  "author": "agent-doubao",
+  "license": "MIT",
+  "entry": "dist/index.js",
+  "ui": {
+    "toolbox": { "label": "设置", "defaultOpen": "panel" },
+    "panels": [
+      {
+        "id": "settings-main",
+        "title": "设置中心",
+        "src": "assets/panel.html",
+        "interactive": true,
+        "width": 600,
+        "height": 480
+      }
+    ]
+  },
+  "permissions": ["files:read", "files:write"],
+  "requires": {},
+  "contributes": {
+    "events": [
+      {
+        "name": "settings:request-enable",
+        "description": "面板请求启用插件，载荷 { pluginId }；宿主应据此调 profile.enable"
+      },
+      {
+        "name": "settings:request-disable",
+        "description": "面板请求禁用插件，载荷 { pluginId }；宿主应据此调 profile.disable"
+      },
+      {
+        "name": "settings:request-uninstall",
+        "description": "面板请求卸载插件，载荷 { pluginId }；宿主应走市场卸载链路（本插件不自行删目录）"
+      },
+      {
+        "name": "settings:request-set-shell",
+        "description": "面板请求切换默认壳，载荷 { shellId }；宿主应据此改 profile.shell"
+      }
+    ]
+  }
+}
