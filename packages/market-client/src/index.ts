@@ -12,35 +12,42 @@
  * 边界：本包不 import @issheepbox/kernel 运行时内容（loader/profile），
  * 插件发现与授权门禁由宿主（desktop/内核）在安装后接线。
  */
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
   assertValidPluginId,
   extractZipTo,
   validatePluginZip,
+  validatePluginZipSelf,
 } from './install';
-import { parseRegistryIndex } from './parse';
+import { parseIndexV2, parsePluginRepoIndex, parseRegistryIndex } from './parse';
 import type {
   InstallResult,
   InstalledPluginInfo,
+  MarketAggregate,
   MarketClientOptions,
+  MarketSource,
+  PluginRecord,
   RegistryIndex,
   RegistryIndexParseResult,
   RegistryPluginEntry,
   RegistryQuery,
+  SourceFetchResult,
+  SourcedPluginRecord,
   UpdateResult,
 } from './types';
 import { MarketInstallError, RegistryFetchError } from './types';
 import { compareVersions } from './versions';
 
 export * from './types';
-export { parseRegistryIndex, SUPPORTED_REGISTRY_VERSIONS } from './parse';
+export { parseRegistryIndex, parseIndexV2, parsePluginRepoIndex, SUPPORTED_REGISTRY_VERSIONS, SUPPORTED_INDEX_FORMATS } from './parse';
 export { compareVersions, parseSemver } from './versions';
 export {
   PLUGIN_ID_RE,
   assertValidPluginId,
   validatePluginZip,
+  validatePluginZipSelf,
   extractZipTo,
 } from './install';
 export type { ValidatedZip, ZipManifest } from './install';
@@ -56,6 +63,22 @@ export const DEFAULT_REGISTRY_URL =
 
 /** 默认拉取超时（毫秒）。 */
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * 由插件仓库主页 URL 构造其根 index.json 的 raw 地址（单插件订阅）。
+ *
+ * 接受两种输入：
+ *  - `github.com/<owner>/<repo>`（或带 .git / 尾部斜杠）→ raw main 分支根 index.json
+ *  - 已是 raw.githubusercontent.com 的 index.json 直链 → 原样返回
+ * 无法识别返回 null（调用方按源级错误降级）。
+ */
+export function buildPluginRepoIndexUrl(repoUrl: string): string | null {
+  const rawDirect = /^https?:\/\/raw\.githubusercontent\.com\/.+\/index\.json$/i;
+  if (rawDirect.test(repoUrl)) return repoUrl;
+  const m = /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(repoUrl.trim());
+  if (!m) return null;
+  return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/main/index.json`;
+}
 
 /**
  * 市场客户端：拉取 + 解析 registry 索引，提供列表/过滤查询。
@@ -77,12 +100,23 @@ export class MarketClient {
   private readonly pluginsDir: string | null;
   /** 最近一次 fetchIndex() 的解析结果（未拉取过时为 null）。 */
   private lastResult: RegistryIndexParseResult | null = null;
+  /** 多源配置（v3；见 types.MarketSource）。 */
+  readonly sources: MarketSource[];
+  /** 最近一次 fetchAll() 的聚合结果（未拉取过时为 null）。 */
+  private lastAggregate: MarketAggregate | null = null;
 
   constructor(options: MarketClientOptions = {}) {
     this.registryUrl = options.registryUrl ?? DEFAULT_REGISTRY_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.pluginsDir = options.pluginsDir ?? null;
+    // v3 多源：显式传入 sources 优先；否则若传了 registryUrl（旧调用方），
+    // 兼容生成一条 legacy index 源，保证 fetchAll 对旧配置也可用。
+    this.sources = options.sources ?? (
+      options.registryUrl
+        ? [{ id: 'legacy', type: 'index', name: '默认源', url: options.registryUrl, enabled: true }]
+        : []
+    );
   }
 
   /**
@@ -219,6 +253,273 @@ export class MarketClient {
   /** 非法条目清单（未拉取过时为空数组）。 */
   invalidEntries(): RegistryIndexParseResult['invalid'] {
     return this.lastResult?.invalid ?? [];
+  }
+
+  // ---------------------------------------------------------------------
+  // 多源模型（v4 定稿）：fetchAll 聚合 / 冲突分组 / 记录级安装（v3）
+  // ---------------------------------------------------------------------
+
+  /** 最近一次 fetchAll() 的聚合结果（未拉取过时为 null）。 */
+  get lastAggregateResult(): MarketAggregate | null {
+    return this.lastAggregate;
+  }
+
+  /**
+   * 拉取全部启用源并聚合为统一记录列表。
+   *
+   * - 源级失败隔离：某源网络失败/解析失败 → 该源 ok=false + error，不阻断其他源。
+   * - 冲突策略（v4 定稿）：同 pluginId 多源不自动选——flat 保留全部记录，
+   *   byPluginId 分组暴露冲突，由 UI 层并列展示、安装时用户选源。
+   */
+  async fetchAll(): Promise<MarketAggregate> {
+    const enabled = this.sources.filter((s) => s.enabled);
+    const results: SourceFetchResult[] = [];
+    for (const src of enabled) {
+      results.push(await this.fetchSource(src));
+    }
+    const flat: SourcedPluginRecord[] = [];
+    const byPluginId = new Map<string, SourcedPluginRecord[]>();
+    for (const r of results) {
+      for (const rec of r.records) {
+        flat.push(rec);
+        const arr = byPluginId.get(rec.pluginId) ?? [];
+        arr.push(rec);
+        byPluginId.set(rec.pluginId, arr);
+      }
+    }
+    this.lastAggregate = { byPluginId, flat, sources: results };
+    return this.lastAggregate;
+  }
+
+  /** 按 pluginId 取聚合记录（多源冲突时返回多条；未 fetchAll 过返回空数组）。 */
+  getRecordsByPluginId(pluginId: string): SourcedPluginRecord[] {
+    return this.lastAggregate?.byPluginId.get(pluginId) ?? [];
+  }
+
+  /** 拉取单个源并解析（网络/解析失败均落入 ok=false，不抛异常）。 */
+  private async fetchSource(src: MarketSource): Promise<SourceFetchResult> {
+    const base: SourceFetchResult = {
+      sourceId: src.id,
+      ok: false,
+      records: [],
+      invalid: [],
+      total: 0,
+    };
+    let url: string;
+    if (src.type === 'plugin-repo') {
+      const built = buildPluginRepoIndexUrl(src.url);
+      if (!built) {
+        base.error = `plugin-repo 源 "${src.name}" 的 URL 不是 GitHub 仓库地址：${src.url}`;
+        return base;
+      }
+      url = built;
+    } else {
+      url = src.url;
+    }
+
+    let text: string;
+    try {
+      const res = await this.fetchTextWithTimeout(url);
+      if (res === null) {
+        base.error = `源 "${src.name}" 拉取失败（网络/超时）`;
+        return base;
+      }
+      text = res;
+    } catch (err) {
+      base.error = `源 "${src.name}" 拉取失败：${(err as Error).message}`;
+      return base;
+    }
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      base.error = `源 "${src.name}" 的 index 不是合法 JSON`;
+      return base;
+    }
+
+    const parsed = src.type === 'plugin-repo' ? parsePluginRepoIndex(raw) : parseIndexV2(raw);
+    if (!parsed.ok) {
+      base.error =
+        `源 "${src.name}" 的 index 结构非法：` +
+        (parsed.topLevelErrors.join('; ') ||
+          parsed.invalid.map((i) => i.reasons.join('；')).join('; ') ||
+          '(未知)');
+      base.invalid = parsed.invalid;
+      base.total = parsed.total;
+      return base;
+    }
+
+    base.ok = true;
+    base.total = parsed.total;
+    base.invalid = parsed.invalid;
+    base.records = parsed.records.map((rec) => ({
+      ...rec,
+      source: {
+        id: src.id,
+        type: src.type,
+        name: src.name,
+        url: src.url,
+        trusted: false,
+      },
+    }));
+    return base;
+  }
+
+  /** 带超时拉取文本；网络失败/非 2xx 抛 RegistryFetchError；成功返回文本。 */
+  private async fetchTextWithTimeout(url: string): Promise<string> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, { signal: controller.signal });
+    } catch (err) {
+      throw new RegistryFetchError(`拉取失败：${String(err)}`);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) {
+      throw new RegistryFetchError(`HTTP ${res.status}`, res.status);
+    }
+    return res.text();
+  }
+
+  /**
+   * 按记录安装插件（v3 主路径，format 2）：下载 zipUrl → sha256 强校验
+   * → 结构/身份校验 → 解压落盘。zipSha256 与索引声明不一致抛 SHA_MISMATCH。
+   */
+  async installFromRecord(record: PluginRecord): Promise<InstallResult> {
+    assertValidPluginId(record.pluginId);
+    const dir = this.requirePluginsDir();
+    fs.mkdirSync(dir, { recursive: true });
+    if (this.installedVersion(record.pluginId) !== null) {
+      throw new MarketInstallError(
+        'ALREADY_INSTALLED',
+        `插件 "${record.pluginId}" 已安装（如需升级请用 updateFromRecord）`,
+      );
+    }
+    const buf = await this.downloadUrl(record.zipUrl);
+    this.assertSha256(buf, record.zipSha256, record.pluginId);
+    const { topDir } = validatePluginZip(buf, record.pluginId);
+    const targetDir = path.join(dir, record.pluginId);
+    const tmpDir = path.join(
+      dir,
+      `.install-${record.pluginId}-${process.pid}-${randomBytes(4).toString('hex')}`,
+    );
+    try {
+      extractZipTo(buf, tmpDir, topDir);
+      fs.renameSync(tmpDir, targetDir);
+    } catch (err) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.rmSync(targetDir, { recursive: true, force: true });
+      if (err instanceof MarketInstallError) throw err;
+      throw new MarketInstallError('EXTRACT_FAILED', `解压插件失败：${(err as Error).message}`);
+    }
+    return { pluginId: record.pluginId, version: record.latestVersion, dir: targetDir };
+  }
+
+  /**
+   * 更新插件（v3 主路径）：record.latestVersion > 本地版本才下载，
+   * sha256 强校验后原子替换；已最新返回 updated=false 不下载。
+   */
+  async updateFromRecord(record: PluginRecord): Promise<UpdateResult> {
+    assertValidPluginId(record.pluginId);
+    const dir = this.requirePluginsDir();
+    const targetDir = path.join(dir, record.pluginId);
+    const installed = this.installedVersion(record.pluginId);
+    if (installed === null) {
+      throw new MarketInstallError('NOT_INSTALLED', `插件 "${record.pluginId}" 未安装，无法更新`);
+    }
+    const cmp = compareVersions(record.latestVersion, installed);
+    if (Number.isNaN(cmp)) {
+      throw new MarketInstallError(
+        'MANIFEST_INVALID',
+        `记录版本 "${record.latestVersion}" 不是合法 SemVer，无法比较`,
+      );
+    }
+    if (cmp <= 0) {
+      return { pluginId: record.pluginId, version: installed, dir: targetDir, updated: false };
+    }
+
+    const buf = await this.downloadUrl(record.zipUrl);
+    this.assertSha256(buf, record.zipSha256, record.pluginId);
+    const { topDir } = validatePluginZip(buf, record.pluginId);
+
+    const tmpDir = path.join(
+      dir,
+      `.update-${record.pluginId}-${process.pid}-${randomBytes(4).toString('hex')}`,
+    );
+    const backupDir = path.join(
+      dir,
+      `.backup-${record.pluginId}-${process.pid}-${randomBytes(4).toString('hex')}`,
+    );
+    try {
+      extractZipTo(buf, tmpDir, topDir);
+      fs.renameSync(targetDir, backupDir);
+      try {
+        fs.renameSync(tmpDir, targetDir);
+      } catch (err) {
+        fs.renameSync(backupDir, targetDir);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        throw new MarketInstallError('EXTRACT_FAILED', `换入新版本失败，已恢复旧版：${(err as Error).message}`);
+      }
+      fs.rmSync(backupDir, { recursive: true, force: true });
+    } catch (err) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.rmSync(backupDir, { recursive: true, force: true });
+      if (err instanceof MarketInstallError) throw err;
+      throw new MarketInstallError('EXTRACT_FAILED', `更新插件失败：${(err as Error).message}`);
+    }
+    return { pluginId: record.pluginId, version: record.latestVersion, dir: targetDir, updated: true };
+  }
+
+  /**
+   * 本地 zip 一次性导入（v4 定稿：仅一次性安装，不生成源记录、不参与更新；
+   * 想升级就重新导入覆盖）。自报 id 校验：zip 顶层目录 == manifest.id。
+   */
+  async importLocalZip(zipPath: string): Promise<InstallResult> {
+    const dir = this.requirePluginsDir();
+    let buf: Buffer;
+    try {
+      buf = fs.readFileSync(zipPath);
+    } catch (err) {
+      throw new MarketInstallError('INVALID_ZIP', `读取本地 zip 失败：${(err as Error).message}`);
+    }
+    const { topDir, manifest } = validatePluginZipSelf(buf);
+    const pluginId = manifest.id;
+    fs.mkdirSync(dir, { recursive: true });
+    if (this.installedVersion(pluginId) !== null) {
+      throw new MarketInstallError(
+        'ALREADY_INSTALLED',
+        `插件 "${pluginId}" 已安装（本地导入不覆盖现装版本，请先卸载或使用源记录更新）`,
+      );
+    }
+    const targetDir = path.join(dir, pluginId);
+    const tmpDir = path.join(
+      dir,
+      `.import-${pluginId}-${process.pid}-${randomBytes(4).toString('hex')}`,
+    );
+    try {
+      extractZipTo(buf, tmpDir, topDir);
+      fs.renameSync(tmpDir, targetDir);
+    } catch (err) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.rmSync(targetDir, { recursive: true, force: true });
+      if (err instanceof MarketInstallError) throw err;
+      throw new MarketInstallError('EXTRACT_FAILED', `导入本地 zip 失败：${(err as Error).message}`);
+    }
+    return { pluginId, version: manifest.version, dir: targetDir };
+  }
+
+  /** zip 二进制 sha256 与索引声明比对；不一致抛 SHA_MISMATCH（供应链防线）。 */
+  private assertSha256(buf: Buffer, expected: string, pluginId: string): void {
+    const actual = createHash('sha256').update(buf).digest('hex');
+    if (actual.toLowerCase() !== expected.toLowerCase()) {
+      throw new MarketInstallError(
+        'SHA_MISMATCH',
+        `插件 "${pluginId}" 的 zip 内容 sha256 与索引声明不一致（${actual.slice(0, 12)}…），拒绝安装`,
+      );
+    }
   }
 
   // ---------------------------------------------------------------------

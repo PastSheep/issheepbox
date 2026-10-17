@@ -118,8 +118,16 @@ export interface RegistryQuery {
 
 /** MarketClient 构造选项。 */
 export interface MarketClientOptions {
-  /** registry 索引 URL（默认 DEFAULT_REGISTRY_URL，见 index.ts）。 */
+  /**
+   * registry 索引 URL（v1 单源兼容；默认 DEFAULT_REGISTRY_URL）。
+   * 传了 sources 时此字段仅供 fetchIndex()（v1）使用，fetchAll() 以 sources 为准。
+   */
   registryUrl?: string;
+  /**
+   * 多源配置（v3）。省略时：若传了 registryUrl → 自动生成一条 legacy index 源；
+   * 两者都省略 → 源列表为空（fetchAll 返回空聚合）。
+   */
+  sources?: MarketSource[];
   /** 自定义 fetch 实现（默认全局 fetch；测试可注入）。 */
   fetchImpl?: typeof fetch;
   /** 拉取超时（毫秒），默认 15000。 */
@@ -127,7 +135,8 @@ export interface MarketClientOptions {
   /**
    * 插件安装目录（pluginsDir，TASK-012）。
    *
-   * install / uninstall / update / listInstalled / installedVersion 依赖此目录；
+   * install / uninstall / update / listInstalled / installedVersion /
+   * installFromRecord / updateFromRecord / importLocalZip 依赖此目录；
    * 未传入时调用这些方法会抛 MarketInstallError(code=PLUGINS_DIR_REQUIRED)。
    */
   pluginsDir?: string;
@@ -169,7 +178,9 @@ export type MarketInstallErrorCode =
   /** 插件 id 不合法（与内核 manifest ID_RE 一致的正则）。 */
   | 'INVALID_PLUGIN_ID'
   /** 构造时未传 pluginsDir 却调用了安装类方法。 */
-  | 'PLUGINS_DIR_REQUIRED';
+  | 'PLUGINS_DIR_REQUIRED'
+  /** zip 二进制 sha256 与索引声明的 zipSha256 不一致（供应链防线）。 */
+  | 'SHA_MISMATCH';
 
 /** 安装 / 卸载 / 更新的类型化错误（带 code，供 UI 分类展示）。 */
 export class MarketInstallError extends Error {
@@ -207,4 +218,117 @@ export interface InstalledPluginInfo {
   pluginId: string;
   version: string;
   dir: string;
+}
+
+// ---------------------------------------------------------------------------
+// 多源市场模型（v4 定稿 / format 2）：
+// 任何"发现渠道"（index 索引源 / plugin-repo 单插件仓库）最终产出 PluginRecord[]；
+// 本地 zip 导入是一次性安装动作，不持久化为源。
+// ---------------------------------------------------------------------------
+
+/**
+ * 插件记录（format 2 条目，全协议统一 schema）。
+ *
+ * 索引源 index.json 的 plugins[] 元素与此一致；单插件仓库根 index.json
+ * 顶层即一条该记录（自描述）。`source` 段不在此 schema 内——由客户端在
+ * 聚合时附加（见 SourcedPluginRecord）。
+ */
+export interface PluginRecord {
+  /** 插件 ID，反向域名风格（与 manifest.id 一致）。 */
+  pluginId: string;
+  /** 展示名。 */
+  name: string;
+  /** 一句话描述。 */
+  description: string;
+  /** 插件源码仓库 URL（GitHub 主页）。 */
+  repoUrl: string;
+  /** 项目主页（可选）。 */
+  homepage?: string;
+  /** 当前最新版本，严格 SemVer。 */
+  latestVersion: string;
+  /** zip 包下载直链（GitHub Release assets）。 */
+  zipUrl: string;
+  /** zip 二进制 sha256（64 位 hex）；安装链路强校验。 */
+  zipSha256: string;
+  /** 该版本兼容的 ctx API range。 */
+  apiVersion: string;
+  /** 该版本声明的权限列表。 */
+  permissions: string[];
+  /** 面板等 UI 元数据摘要（供市场列表免下载展示）。 */
+  ui?: { panels?: Array<{ id: string; title: string }> };
+  /** 插件组预留（TASK-019）。 */
+  group?: string | null;
+  /** 记录最后更新时间，ISO 8601。 */
+  updatedAt: string;
+}
+
+/** 发现渠道类型：组织级索引源 / 单插件仓库订阅。 */
+export type MarketSourceType = 'index' | 'plugin-repo';
+
+/** 用户配置的插件源（settings 持久化；本地 zip 导入不构成源）。 */
+export interface MarketSource {
+  /** 本地唯一标识。 */
+  id: string;
+  type: MarketSourceType;
+  /** 展示名（如"官方源"、"鼠鼠数据"）。 */
+  name: string;
+  /**
+   * index 源：index.json 的完整 URL；
+   * plugin-repo 源：仓库主页 URL（github.com/owner/repo，
+   * 客户端据此构造 raw 根 index.json）。
+   */
+  url: string;
+  enabled: boolean;
+}
+
+/** 聚合后带来源标记的记录（客户端在聚合时附加 source 段）。 */
+export interface SourcedPluginRecord extends PluginRecord {
+  source: {
+    id: string;
+    type: MarketSourceType;
+    name: string;
+    url: string;
+    /** 信任标记（UI 透明展示；客户端不拦截任何源，用户自决）。 */
+    trusted: boolean;
+  };
+}
+
+/** 被拒绝的非法 format 2 记录（容错结果的一部分）。 */
+export interface PluginEntryErrorV2 {
+  /** 记录在 plugins[] 中的原始下标（单插件仓库解析时为 0）。 */
+  index: number;
+  /** 记录 pluginId（能读出才填）。 */
+  pluginId?: string;
+  /** 拒绝原因（可读中文）。 */
+  reasons: string[];
+}
+
+/** 单个源拉取 + 解析结果（源级失败隔离：ok=false 不阻断其他源）。 */
+export interface SourceFetchResult {
+  sourceId: string;
+  /** 网络失败 / HTTP 非 2xx / 顶层结构非法时为 false。 */
+  ok: boolean;
+  /** 失败原因（成功时 undefined）。 */
+  error?: string;
+  /** 通过校验的合法记录（已附 source 段）。 */
+  records: SourcedPluginRecord[];
+  /** 被拒绝的非法记录及其原因。 */
+  invalid: PluginEntryErrorV2[];
+  /** 原始记录总数（含非法）。 */
+  total: number;
+}
+
+/**
+ * 多源聚合结果（fetchAll 返回）。
+ *
+ * 同 pluginId 出现在多个源时**不自动去重选源**——flat 保留全部记录，
+ * byPluginId 分组暴露冲突，由 UI 层并列展示、用户在安装时选源。
+ */
+export interface MarketAggregate {
+  /** 按 pluginId 分组（每组 1..n 条，多源冲突在此暴露）。 */
+  byPluginId: Map<string, SourcedPluginRecord[]>;
+  /** 全部合法记录平铺（含重复 pluginId 的多源记录）。 */
+  flat: SourcedPluginRecord[];
+  /** 每个启用源一条结果（含失败降级，调用方可展示源状态）。 */
+  sources: SourceFetchResult[];
 }

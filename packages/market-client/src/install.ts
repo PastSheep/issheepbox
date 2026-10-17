@@ -174,6 +174,87 @@ export function validatePluginZip(buf: Buffer, pluginId: string): ValidatedZip {
 }
 
 /**
+ * 校验插件 zip 完整性（自报 id 形态，本地导入用）。
+ *
+ * 与 validatePluginZip 的区别：不预先知道 pluginId——校验 zip 结构安全、
+ * 顶层恰好一个目录、`<topDir>/plugin.json` 存在且合法、manifest.id === topDir
+ * （即 zip 自我声明一致）。返回的 ValidatedZip.manifest.id 即插件 id。
+ */
+export function validatePluginZipSelf(buf: Buffer): ValidatedZip {
+  const zip = openZip(buf);
+  const entries = zip.getEntries();
+  if (entries.length === 0) {
+    throw new MarketInstallError('INVALID_ZIP', 'zip 为空包（无任何条目）');
+  }
+
+  const topDirs = new Set<string>();
+  for (const entry of entries) {
+    const name = entry.entryName;
+    assertSafeEntryName(name);
+    const firstSegment = name.split('/')[0];
+    if (firstSegment) topDirs.add(firstSegment);
+  }
+  if (topDirs.size !== 1) {
+    throw new MarketInstallError(
+      'INVALID_ZIP',
+      `zip 顶层必须恰好一个目录（当前顶层项：${[...topDirs].join(', ') || '(无)'}）`,
+    );
+  }
+  const topDir = [...topDirs][0];
+  assertValidPluginId(topDir);
+
+  const manifestPath = `${topDir}/plugin.json`;
+  const manifestEntry = entries.find((e) => e.entryName === manifestPath);
+  if (!manifestEntry) {
+    throw new MarketInstallError('MANIFEST_INVALID', `zip 缺少 ${manifestPath}`);
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(manifestEntry.getData().toString('utf8'));
+  } catch (err) {
+    throw new MarketInstallError(
+      'MANIFEST_INVALID',
+      `${manifestPath} 不是合法 JSON：${(err as Error).message}`,
+    );
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new MarketInstallError('MANIFEST_INVALID', `${manifestPath} 必须是 JSON 对象`);
+  }
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.id !== 'string' || obj.id === '') {
+    throw new MarketInstallError('MANIFEST_INVALID', `${manifestPath} 缺少必填字段 "id"`);
+  }
+  if (obj.id !== topDir) {
+    throw new MarketInstallError(
+      'ID_MISMATCH',
+      `manifest.id "${obj.id}" ≠ zip 顶层目录名 "${topDir}"（包自报不一致）`,
+    );
+  }
+  if (typeof obj.version !== 'string' || obj.version === '') {
+    throw new MarketInstallError('MANIFEST_INVALID', `${manifestPath} 缺少必填字段 "version"`);
+  }
+  if (typeof obj.entry !== 'string' || obj.entry === '') {
+    throw new MarketInstallError('MANIFEST_INVALID', `${manifestPath} 缺少必填字段 "entry"`);
+  }
+  const entryTarget = `${topDir}/${obj.entry}`;
+  if (!entries.some((e) => e.entryName === entryTarget)) {
+    throw new MarketInstallError(
+      'MANIFEST_INVALID',
+      `manifest.entry "${obj.entry}" 指向的文件不在包内：${entryTarget}`,
+    );
+  }
+
+  return {
+    topDir,
+    manifest: {
+      id: obj.id,
+      version: obj.version,
+      entry: obj.entry,
+    },
+  };
+}
+
+/**
  * 把已校验的 zip 解压到 destDir（临时目录）。
  *
  * 调用方必须先 validatePluginZip（得到 topDir）；zip 顶层目录 `<topDir>/` 前缀在此剥除，

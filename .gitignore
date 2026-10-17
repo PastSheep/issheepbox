@@ -41,3 +41,6 @@ temp/
 
 # dev 模式市场安装产物（插件落入开发态 pluginsDir=monorepo packages/，不入库）
 packages/org.issheepbox.*/
+
+# agent 独立克隆工作区（并行开发用，勿入库）
+workspaces/
