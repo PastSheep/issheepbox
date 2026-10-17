@@ -112,6 +112,12 @@ importers:
         specifier: workspace:*
         version: link:../../kernel
 
+  packages/plugins/files-picker:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
   packages/plugins/files-service:
     devDependencies:
       '@issheepbox/kernel':
@@ -161,6 +167,12 @@ importers:
         version: link:../../kernel
 
   packages/plugins/updater:
+    devDependencies:
+      '@issheepbox/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+
+  packages/plugins/updater-ui:
     devDependencies:
       '@issheepbox/kernel':
         specifier: workspace:*
